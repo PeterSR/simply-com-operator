@@ -18,6 +18,7 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -98,17 +99,13 @@ func (r *DNSRecordReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			fmt.Sprintf("the account does not allow zone %q", zone), 0)
 	}
 
-	if obj.Spec.Adopt && !acc.allowAdopt {
-		return r.notReady(ctx, &obj, simplycomv1alpha1.ReasonNotPermitted,
-			"spec.adopt is set, but the account does not have allowAdopt", 0)
-	}
-
 	records, cached, err := r.Access.ListZone(ctx, acc, zone)
 	if err != nil {
 		return r.apiError(ctx, &obj, "listing the zone", err)
 	}
 	want := desiredRecord(&obj.Spec, r.OwnerID, ref)
-	p := planRecord(records, want, r.OwnerID, ref, obj.Status.RecordID, obj.Spec.Adopt)
+	adopt := obj.Spec.Adopt && acc.allowAdopt
+	p := planRecord(records, want, r.OwnerID, ref, obj.Status.RecordID, adopt)
 	if cached && (p.action != actionNone || len(p.duplicates) > 0) {
 		// Never write on the strength of a cached listing: a record made in the control panel since
 		// would be missed, and the operator would create a duplicate of it.
@@ -116,7 +113,10 @@ func (r *DNSRecordReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		if records, _, err = r.Access.ListZone(ctx, acc, zone); err != nil {
 			return r.apiError(ctx, &obj, "listing the zone", err)
 		}
-		p = planRecord(records, want, r.OwnerID, ref, obj.Status.RecordID, obj.Spec.Adopt)
+		p = planRecord(records, want, r.OwnerID, ref, obj.Status.RecordID, adopt)
+	}
+	if p.action == actionConflict && obj.Spec.Adopt && !acc.allowAdopt {
+		p.conflict += "; spec.adopt has no effect because the account does not have allowAdopt"
 	}
 
 	if p.action == actionConflict {
@@ -185,49 +185,71 @@ func (r *DNSRecordReconciler) finalize(ctx context.Context, obj *simplycomv1alph
 	if !controllerutil.ContainsFinalizer(obj, Finalizer) {
 		return ctrl.Result{}, nil
 	}
+	log := logf.FromContext(ctx)
 	orphan := obj.Spec.DeletionPolicy == simplycomv1alpha1.DeletionPolicyOrphan
 	acc, err := r.Access.Resolve(ctx, obj.Namespace, obj.Spec.AccountRef)
-	switch {
-	case err != nil && orphan:
-		// The record stays either way; without the account its marker stays too.
-		return r.release(ctx, obj)
-	case err != nil:
+	if err != nil {
+		var ae *errAccount
+		if !errors.As(err, &ae) {
+			return ctrl.Result{}, err
+		}
+		if orphan || ae.reason == simplycomv1alpha1.ReasonNotPermitted {
+			// The record stays either way; the operator may not, or cannot, reach it to tidy up.
+			r.Recorder.Eventf(obj, nil, corev1.EventTypeWarning, ae.reason, "Delete",
+				"%s; any record is left in the zone as it is, with the ownership marker", err)
+			return r.release(ctx, obj)
+		}
 		msg := err.Error() + "; the record cannot be removed until the account is back, " +
 			"or set spec.deletionPolicy to Orphan to leave it in the zone"
 		return r.notReady(ctx, obj, reasonFor(err), msg, r.RetryInterval)
-	case !acc.allowsZone(obj.Spec.Zone):
+	}
+	zone := obj.Spec.Zone
+	if !acc.allowsZone(zone) {
 		// The account no longer lets the operator touch this zone, not even to clean up.
-		logf.FromContext(ctx).Info("zone not allowed by the account; leaving any record in place", "zone", obj.Spec.Zone)
+		log.Info("zone not allowed by the account; leaving any record in place", "zone", zone)
 		return r.release(ctx, obj)
 	}
 
-	zone := obj.Spec.Zone
+	if err := r.releaseRecords(ctx, acc, zone, ref, orphan); err != nil {
+		if orphan {
+			// Taking the marker off is a courtesy; an unreachable Simply.com must not keep the
+			// object, and with it maybe a whole namespace, from going away.
+			r.Recorder.Eventf(obj, nil, corev1.EventTypeWarning, simplycomv1alpha1.ReasonAPIError, "Delete",
+				"could not remove the ownership marker, which stays on the record: %s", err)
+			return r.release(ctx, obj)
+		}
+		return r.apiError(ctx, obj, "deleting the record", err)
+	}
+	return r.release(ctx, obj)
+}
+
+// releaseRecords deletes this object's records from zone, or with orphan takes the marker off them.
+func (r *DNSRecordReconciler) releaseRecords(ctx context.Context, acc *account, zone, ref string, orphan bool) error {
 	r.Access.ForgetZone(acc, zone)
 	records, _, err := r.Access.ListZone(ctx, acc, zone)
-	if err != nil && !simply.IsNotFound(err) {
-		return r.apiError(ctx, obj, "listing the zone", err)
+	if err != nil {
+		if simply.IsNotFound(err) {
+			return nil
+		}
+		return err
 	}
 	for _, rec := range records {
 		if o, rf, ok := parseMarker(rec.Comment); !ok || o != r.OwnerID || rf != ref {
 			continue
 		}
 		if orphan {
-			// Without the marker no later object of the same name takes the record over unasked.
 			rec.Comment = commentWithoutMarker(rec.Comment)
 			err = acc.client.UpdateDNSRecord(ctx, zone, rec.ID, rec)
 		} else {
 			err = acc.client.DeleteDNSRecord(ctx, zone, rec.ID)
 		}
 		if err != nil && !simply.IsNotFound(err) {
-			return r.apiError(ctx, obj, "releasing the record", err)
+			return err
 		}
 		r.Access.Wrote(acc, zone)
-		logf.FromContext(ctx).Info("released record", "recordID", rec.ID, "fqdn", obj.Status.FQDN, "orphan", orphan)
+		logf.FromContext(ctx).Info("released record", "recordID", rec.ID, "zone", zone, "orphan", orphan)
 	}
-	if err := r.Access.PublishIfNeeded(ctx, acc, zone); err != nil {
-		return r.apiError(ctx, obj, "reloading the zone", err)
-	}
-	return r.release(ctx, obj)
+	return r.Access.PublishIfNeeded(ctx, acc, zone)
 }
 
 func (r *DNSRecordReconciler) release(ctx context.Context, obj *simplycomv1alpha1.DNSRecord) (ctrl.Result, error) {

@@ -5,7 +5,8 @@
 #
 #   hack/e2e-live.sh <zone> [label] [account]
 #
-# Needs kubectl access to a cluster running the operator with a ready ClusterAccount, and dig.
+# Needs kubectl access to a cluster running the operator with a ready ClusterAccount that allows
+# the namespace simply-com-operator-live-test (allowedNamespaces), and dig.
 set -euo pipefail
 
 zone=${1:?usage: $0 <zone> [label] [account]}

@@ -236,6 +236,19 @@ var _ = Describe("DNSRecord", Ordered, func() {
 		Expect(recordsNamed("orphan")()).To(HaveLen(1))
 	})
 
+	It("lets an Orphan object go when Simply.com cannot take the marker off", func() {
+		obj := newRecord(simplycomv1alpha1.DNSRecordSpec{
+			Name: "orphan-down", Type: "A", Data: "192.0.2.13", DeletionPolicy: simplycomv1alpha1.DeletionPolicyOrphan,
+		})
+		Expect(k8sClient.Create(ctx, obj)).To(Succeed())
+		key := types.NamespacedName{Namespace: obj.Namespace, Name: obj.Name}
+		Eventually(readyCondition(key), timeout, interval).Should(haveReason(metav1.ConditionTrue, simplycomv1alpha1.ReasonSynced))
+		fake.FailReloads(100)
+		deleteAndWait(obj)
+		fake.FailReloads(0)
+		Expect(recordsNamed("orphan-down")()).To(HaveLen(1))
+	})
+
 	It("publishes a write whose reload failed at the next sync", func() {
 		fake.FailReloads(1)
 		before := fake.Reloads(testZone)
@@ -263,7 +276,10 @@ var _ = Describe("DNSRecord", Ordered, func() {
 		})
 		Expect(k8sClient.Create(ctx, obj)).To(Succeed())
 		key := types.NamespacedName{Namespace: obj.Namespace, Name: obj.Name}
-		Eventually(readyCondition(key), timeout, interval).Should(haveReason(metav1.ConditionFalse, simplycomv1alpha1.ReasonNotPermitted))
+		Eventually(readyCondition(key), timeout, interval).Should(haveReason(metav1.ConditionFalse, simplycomv1alpha1.ReasonConflict))
+		var got simplycomv1alpha1.DNSRecord
+		Expect(k8sClient.Get(ctx, key, &got)).To(Succeed())
+		Expect(got.Status.Conditions[0].Message).To(ContainSubstring("allowAdopt"))
 		deleteAndWait(obj)
 		Expect(recordsNamed("handmade")()).To(ConsistOf(HaveField("ID", id)))
 		Expect(*recordsNamed("handmade")()[0].Comment).To(Equal("by hand"))

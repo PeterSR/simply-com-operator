@@ -134,6 +134,11 @@ func TestPlanRecord(t *testing.T) {
 		{"other owner conflicts even with adopt", []simply.DNSRecord{foreign(5, "A", "192.0.2.1", marker("other", "ns/www"))}, true, actionConflict, 0, 0},
 		{"update into a copy of an unmanaged record conflicts",
 			[]simply.DNSRecord{ours(1, "192.0.2.9"), foreign(5, "A", "192.0.2.1", "")}, false, actionConflict, 0, 0},
+		{"TTL change next to an identical unmanaged twin",
+			[]simply.DNSRecord{{ID: 1, Name: "www", Type: "A", Data: "192.0.2.1", TTL: new(int32(300)),
+				Comment: new(marker("me", "ns/www"))}, foreign(5, "A", "192.0.2.1", "")}, false, actionUpdate, 1, 0},
+		{"update into a copy of another object's record conflicts",
+			[]simply.DNSRecord{ours(1, "192.0.2.9"), foreign(5, "A", "192.0.2.1", marker("me", "ns/other"))}, false, actionConflict, 0, 0},
 		{"unmanaged CNAME conflicts", []simply.DNSRecord{foreign(5, "CNAME", "x.example.net", "")}, true, actionConflict, 0, 0},
 	}
 	for _, c := range cases {

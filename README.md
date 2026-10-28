@@ -148,7 +148,7 @@ shop        shop   shop.example.com   CNAME   True    Synced   1m
 |---|---|
 | `AccountNotFound`, `SecretNotFound` | the account or its Secret is missing; retried, and picked up when it appears |
 | `ZoneNotAllowed` | the account's `zones` does not include the zone |
-| `NotPermitted` | the ClusterAccount's `allowedNamespaces` leaves out this namespace, or `adopt` is set and the account lacks `allowAdopt` |
+| `NotPermitted` | the ClusterAccount's `allowedNamespaces` leaves out this namespace |
 | `InvalidSpec` | for example an `A` record whose data is not an IPv4 address, or a CNAME at the apex |
 | `Conflict` | another record stands in the way; the message says which (see below) |
 | `APIError` | Simply.com refused or failed the request; the message has its answer |
@@ -166,7 +166,7 @@ The operator was written to run against zones that also hold records made by han
 - A record with the same name, type and data that is **not** marked is a `Conflict`, and is left as
   it is. Set `adopt: true` to take it over (the account needs `allowAdopt`); the operator then
   rewrites its comment to the spec's comment plus the marker, and from then on manages (and on
-  deletion removes) it. A managed record is never changed into a copy of an unmarked one.
+  deletion removes) it. A managed record is never changed into a copy of a record it does not manage.
 - A record marked by another installation or another object is always a `Conflict`, also with `adopt`.
 - A `CNAME` cannot share its name with another record. Wanting a CNAME where an unmanaged record
   exists, or another record where an unmanaged CNAME exists, is a `Conflict`.
@@ -175,7 +175,11 @@ The operator was written to run against zones that also hold records made by han
 - With `spec.zones` on the account, records outside those zones are neither written nor read, also
   when the `DNSRecord` is deleted.
 - `deletionPolicy: Orphan` removes the marker as it lets go, so a later object with the same name
-  does not quietly take the record over.
+  does not quietly take the record over. If the account is gone or Simply.com cannot be reached,
+  the object is let go anyway and the marker stays (a warning event says so).
+- A ClusterAccount whose `allowedNamespaces` no longer includes a namespace lets that namespace's
+  `DNSRecord`s be deleted without touching their records, as does an account whose `zones` no
+  longer includes the zone.
 
 **Who may create records.** Anyone who can create a `DNSRecord` can add records to, and with
 `allowAdopt` take over, every zone of every account their namespace may use. Extra records at an
@@ -254,9 +258,8 @@ namespaced `Account`s.
   needs changing, and shares a recent listing between records otherwise. Very large zones with many
   managed records will make many requests at startup; the rate limit keeps them in bounds.
 - A change made in the control panel to a managed record is undone at the next resync, not at once.
-- A zone whose reload failed is reloaded at the next sync of any record in it; the operator keeps
-  that in memory, so a restart in between leaves the change unpublished until the zone is next
-  written to.
+- A zone whose reload failed is reloaded at the next sync of any record in it, and every zone is
+  reloaded once after the operator starts, in case a change was stored but never published.
 - Record data is compared after normalising host names, addresses, SRV targets and TXT quotes.
   For other types (CAA, TLSA, ...) write the data the way Simply.com returns it, or each resync
   rewrites the record.

@@ -56,8 +56,11 @@ type SimplyAccess struct {
 
 	mu    sync.Mutex
 	zones map[string]zoneEntry
-	// unpublished holds zones written to since their last successful reload.
+	// unpublished holds zones written to since their last successful reload; published holds
+	// zones reloaded since the process started. A zone in neither is reloaded once, in case a
+	// write before a restart was never published.
 	unpublished map[string]bool
+	published   map[string]bool
 }
 
 type zoneEntry struct {
@@ -88,6 +91,8 @@ func reasonFor(err error) string {
 
 // account is a resolved Account or ClusterAccount.
 type account struct {
+	// ref names the Account or ClusterAccount.
+	ref        string
 	client     *simply.Client
 	zones      []string
 	allowAdopt bool
@@ -148,6 +153,7 @@ func (s *SimplyAccess) Resolve(ctx context.Context, namespace string, ref simply
 	}
 	sum := sha256.Sum256([]byte(apiKey))
 	return &account{
+		ref:        accountRefKey(ref.Kind, namespace, ref.Name),
 		client:     s.NewClient(apiKey),
 		zones:      spec.Zones,
 		allowAdopt: spec.AllowAdopt,
@@ -204,24 +210,30 @@ func (s *SimplyAccess) ForgetZone(acc *account, zone string) {
 	s.mu.Unlock()
 }
 
+// zoneKey identifies a zone of an account. It is the account's object, not its key, so a rotated
+// key keeps the zone's pending reload.
+func zoneKey(acc *account, zone string) string {
+	return acc.ref + "/" + strings.ToLower(zone)
+}
+
 // Wrote records a write to zone: its listing is stale, and it must be reloaded to be published.
 func (s *SimplyAccess) Wrote(acc *account, zone string) {
-	k := acc.cacheKey + "/" + strings.ToLower(zone)
 	s.mu.Lock()
-	delete(s.zones, k)
+	delete(s.zones, acc.cacheKey+"/"+strings.ToLower(zone))
 	if s.unpublished == nil {
 		s.unpublished = map[string]bool{}
 	}
-	s.unpublished[k] = true
+	s.unpublished[zoneKey(acc, zone)] = true
 	s.mu.Unlock()
 }
 
-// PublishIfNeeded reloads zone if it was written to since its last successful reload. A failed
-// reload stays pending, so the next sync of any record in the zone tries again.
+// PublishIfNeeded reloads zone if it was written to since its last successful reload, or has not
+// been reloaded since the process started. A failed reload stays pending, so the next sync of any
+// record in the zone tries again.
 func (s *SimplyAccess) PublishIfNeeded(ctx context.Context, acc *account, zone string) error {
-	k := acc.cacheKey + "/" + strings.ToLower(zone)
+	k := zoneKey(acc, zone)
 	s.mu.Lock()
-	pending := s.unpublished[k]
+	pending := s.unpublished[k] || !s.published[k]
 	s.mu.Unlock()
 	if !pending {
 		return nil
@@ -231,6 +243,10 @@ func (s *SimplyAccess) PublishIfNeeded(ctx context.Context, acc *account, zone s
 	}
 	s.mu.Lock()
 	delete(s.unpublished, k)
+	if s.published == nil {
+		s.published = map[string]bool{}
+	}
+	s.published[k] = true
 	s.mu.Unlock()
 	return nil
 }

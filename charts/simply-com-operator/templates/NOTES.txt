@@ -12,6 +12,8 @@ Next, store a Simply.com API key (Account, API keys in the control panel) and cr
     apiKeySecretRef:
       name: simply-com-api-key
       namespace: {{ .Release.Namespace }}
+    zones: [example.com]           # the zones it may change
+    allowedNamespaces: [default]   # the namespaces whose DNSRecords may use it
   YAML
 
 Then declare records:

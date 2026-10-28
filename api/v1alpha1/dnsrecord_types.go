@@ -53,7 +53,7 @@ type DeletionPolicy string
 const (
 	// DeletionPolicyDelete removes the record from the zone.
 	DeletionPolicyDelete DeletionPolicy = "Delete"
-	// DeletionPolicyOrphan leaves the record in the zone, still marked as managed.
+	// DeletionPolicyOrphan leaves the record in the zone and takes the ownership marker off it.
 	DeletionPolicyOrphan DeletionPolicy = "Orphan"
 )
 
@@ -67,7 +67,7 @@ type DNSRecordSpec struct {
 	AccountRef AccountReference `json:"accountRef"`
 
 	// zone is the Simply.com product holding the DNS zone, which is the domain name, such as example.com.
-	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:Pattern=`^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$`
 	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="zone is immutable"
 	Zone string `json:"zone"`
 

@@ -246,11 +246,17 @@ func planRecord(zone []simply.DNSRecord, want simply.DNSRecord, ownerID, ref str
 			p.action = actionNone
 			return p
 		}
-		// Changing the record must not turn it into a copy of one the operator does not own.
+		if sameRecordData(keep, want) {
+			return p
+		}
+		// Changing the record must not turn it into a copy of a record this object does not own.
 		for _, r := range zone {
-			if _, _, ok := parseMarker(r.Comment); !ok && sameRecordData(r, want) {
+			if o, rf, ok := parseMarker(r.Comment); ok && o == ownerID && rf == ref {
+				continue
+			}
+			if sameRecordData(r, want) {
 				return plan{action: actionConflict, conflict: fmt.Sprintf(
-					"record %d already has this name, type and data and is not managed by the operator", r.ID)}
+					"record %d already has this name, type and data", r.ID)}
 			}
 		}
 		return p
