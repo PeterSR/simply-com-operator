@@ -1,0 +1,5 @@
+apiVersion: v2
+name: example-app
+description: An application chart that brings its own DNS records, installed once per customer
+type: application
+version: 0.1.0

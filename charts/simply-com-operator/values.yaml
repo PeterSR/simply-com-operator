@@ -1,0 +1,100 @@
+# Default values for simply-com-operator.
+
+image:
+  repository: ghcr.io/petersr/simply-com-operator
+  # Defaults to the chart's appVersion.
+  tag: ""
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+# Only one replica works at a time (leader election); more give faster failover.
+replicaCount: 1
+
+crds:
+  # Install the CustomResourceDefinitions with the chart.
+  install: true
+  # Keep the CustomResourceDefinitions, and with them every DNSRecord, when the chart is uninstalled.
+  keep: true
+
+# Identifies this installation in the ownership marker the operator writes into the comment of
+# every record it manages. Installations that share a Simply.com zone must use different ids.
+ownerID: default
+
+# Simply.com API settings.
+simplyAPI:
+  url: https://api.simply.com/2
+  # Most requests per second to Simply.com, for the whole operator.
+  rateLimit: 5
+  burst: 10
+
+# How often a record in sync is checked again, to undo changes made outside Kubernetes.
+resyncInterval: 10m
+# How long to wait after a problem only the user or Simply.com can fix.
+retryInterval: 1m
+# How often an account's API key is checked again.
+accountCheckInterval: 1h
+
+# Optionally create a ClusterAccount with the chart. The Secret is not created by the chart: make
+# it yourself (or with a secret manager) in the release namespace, holding the API key under
+# secretKey.
+clusterAccount:
+  create: false
+  name: default
+  secretName: simply-com-api-key
+  secretKey: apiKey
+  # Products (domain names) the account may change. Empty allows every product the key reaches.
+  zones: []
+
+rbac:
+  # Add DNSRecord and Account permissions to the built-in admin, edit and view ClusterRoles, so
+  # namespace users can manage records without extra grants.
+  aggregateToDefaultRoles: true
+
+logLevel: info
+
+metrics:
+  enabled: false
+  port: 8080
+  serviceMonitor:
+    enabled: false
+    interval: 30s
+    labels: {}
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+podAnnotations: {}
+podLabels: {}
+
+podSecurityContext:
+  runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: ["ALL"]
+
+resources:
+  requests:
+    cpu: 10m
+    memory: 64Mi
+  limits:
+    memory: 128Mi
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+priorityClassName: ""
+
+# Extra command-line arguments for the manager.
+extraArgs: []
+# Extra environment variables for the manager.
+extraEnv: []

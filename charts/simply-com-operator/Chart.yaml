@@ -1,0 +1,40 @@
+apiVersion: v2
+name: simply-com-operator
+description: A Kubernetes operator that manages Simply.com resources, such as DNS records, declaratively as custom resources
+type: application
+# The release workflow sets version and appVersion from the tag.
+version: 0.1.0
+appVersion: "0.1.0"
+kubeVersion: ">=1.29.0-0"
+home: https://github.com/PeterSR/simply-com-operator
+sources:
+  - https://github.com/PeterSR/simply-com-operator
+maintainers:
+  - name: Peter Severin Rasmussen
+    url: https://github.com/PeterSR
+keywords:
+  - simply.com
+  - dns
+  - operator
+  - crd
+annotations:
+  artifacthub.io/license: Apache-2.0
+  artifacthub.io/category: networking
+  artifacthub.io/prerelease: "true"
+  artifacthub.io/operator: "true"
+  artifacthub.io/crds: |
+    - kind: DNSRecord
+      version: v1alpha1
+      name: dnsrecords.simplycom.petersr.github.io
+      displayName: DNSRecord
+      description: One record in a DNS zone hosted at Simply.com
+    - kind: ClusterAccount
+      version: v1alpha1
+      name: clusteraccounts.simplycom.petersr.github.io
+      displayName: ClusterAccount
+      description: Simply.com credentials usable from every namespace
+    - kind: Account
+      version: v1alpha1
+      name: accounts.simplycom.petersr.github.io
+      displayName: Account
+      description: Simply.com credentials usable from one namespace

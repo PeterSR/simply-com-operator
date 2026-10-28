@@ -1,0 +1,85 @@
+# One DNSRecord per record. All use the ClusterAccount "default" (examples/clusteraccount.yaml).
+apiVersion: simplycom.petersr.github.io/v1alpha1
+kind: DNSRecord
+metadata:
+  name: apex
+spec:
+  accountRef: {name: default}
+  zone: example.com
+  name: "@"
+  type: A
+  data: 192.0.2.1
+  ttl: 3600
+---
+apiVersion: simplycom.petersr.github.io/v1alpha1
+kind: DNSRecord
+metadata:
+  name: apex-v6
+spec:
+  accountRef: {name: default}
+  zone: example.com
+  name: "@"
+  type: AAAA
+  data: "2001:db8::1"
+---
+apiVersion: simplycom.petersr.github.io/v1alpha1
+kind: DNSRecord
+metadata:
+  name: www
+spec:
+  accountRef: {name: default}
+  zone: example.com
+  name: www
+  type: CNAME
+  data: example.com
+  comment: website
+---
+apiVersion: simplycom.petersr.github.io/v1alpha1
+kind: DNSRecord
+metadata:
+  name: mail
+spec:
+  accountRef: {name: default}
+  zone: example.com
+  name: "@"
+  type: MX
+  data: mx.mail-provider.example
+  priority: 10
+---
+apiVersion: simplycom.petersr.github.io/v1alpha1
+kind: DNSRecord
+metadata:
+  name: spf
+spec:
+  accountRef: {name: default}
+  zone: example.com
+  name: "@"
+  type: TXT
+  data: v=spf1 include:mail-provider.example ~all
+---
+apiVersion: simplycom.petersr.github.io/v1alpha1
+kind: DNSRecord
+metadata:
+  name: sip
+spec:
+  accountRef: {name: default}
+  zone: example.com
+  name: _sip._tcp
+  type: SRV
+  priority: 10
+  data: 60 5060 sip.example.com
+---
+# Take over a record that was made by hand, instead of reporting a conflict, and leave it in the
+# zone when this object is deleted.
+apiVersion: simplycom.petersr.github.io/v1alpha1
+kind: DNSRecord
+metadata:
+  name: legacy-verification
+spec:
+  accountRef: {name: default}
+  zone: example.com
+  name: "@"
+  type: TXT
+  data: site-verification=abc123
+  adopt: true
+  deletionPolicy: Orphan

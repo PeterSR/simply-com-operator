@@ -1,0 +1,13 @@
+# A Simply.com API key for the whole cluster. Create the Secret first:
+#   kubectl -n simply-com-operator create secret generic simply-com-api-key --from-literal=apiKey=<key>
+apiVersion: simplycom.petersr.github.io/v1alpha1
+kind: ClusterAccount
+metadata:
+  name: default
+spec:
+  apiKeySecretRef:
+    name: simply-com-api-key
+    namespace: simply-com-operator
+  # Optional: the only zones records using this account may change.
+  zones:
+    - example.com

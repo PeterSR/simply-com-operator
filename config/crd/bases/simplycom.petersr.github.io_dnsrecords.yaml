@@ -1,0 +1,258 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.22.0
+  name: dnsrecords.simplycom.petersr.github.io
+spec:
+  group: simplycom.petersr.github.io
+  names:
+    categories:
+    - simplycom
+    kind: DNSRecord
+    listKind: DNSRecordList
+    plural: dnsrecords
+    shortNames:
+    - sdns
+    singular: dnsrecord
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .status.fqdn
+      name: FQDN
+      type: string
+    - jsonPath: .spec.type
+      name: Type
+      type: string
+    - jsonPath: .spec.data
+      name: Data
+      priority: 1
+      type: string
+    - jsonPath: .status.conditions[?(@.type=="Ready")].status
+      name: Ready
+      type: string
+    - jsonPath: .status.conditions[?(@.type=="Ready")].reason
+      name: Reason
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: DNSRecord is one record in a DNS zone hosted at Simply.com.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: DNSRecordSpec is the desired state of one record in a Simply.com
+              DNS zone.
+            properties:
+              accountRef:
+                description: accountRef names the account whose API key is used.
+                properties:
+                  kind:
+                    default: ClusterAccount
+                    description: kind is Account (in the object's own namespace) or
+                      ClusterAccount. Defaults to ClusterAccount.
+                    enum:
+                    - Account
+                    - ClusterAccount
+                    type: string
+                  name:
+                    description: name of the Account or ClusterAccount.
+                    minLength: 1
+                    type: string
+                required:
+                - name
+                type: object
+                x-kubernetes-validations:
+                - message: accountRef is immutable
+                  rule: self == oldSelf
+              adopt:
+                description: |-
+                  adopt lets the operator take over an existing record that is not marked as managed but has
+                  exactly this name, type and data. Without it such a record is reported as a conflict and left
+                  alone. The operator never changes or deletes a record it does not manage.
+                type: boolean
+              comment:
+                description: |-
+                  comment shown next to the record in the Simply.com control panel. The operator appends its
+                  ownership marker to it.
+                maxLength: 128
+                type: string
+              data:
+                description: |-
+                  data is the record's value as Simply.com stores it: an address for A and AAAA, a host name
+                  for CNAME, MX and NS (no trailing dot needed), the text for TXT (without quotes), and
+                  "weight port target" for SRV.
+                minLength: 1
+                type: string
+              deletionPolicy:
+                default: Delete
+                description: |-
+                  deletionPolicy says whether deleting this object removes the record (Delete, the default) or
+                  leaves it in the zone (Orphan).
+                enum:
+                - Delete
+                - Orphan
+                type: string
+              name:
+                description: |-
+                  name of the record relative to the zone: "www", "_dmarc", "@" for the zone apex, "*" for a
+                  wildcard. A fully qualified name inside the zone, such as www.example.com, is accepted too.
+                minLength: 1
+                type: string
+              priority:
+                description: priority for MX and SRV records.
+                format: int32
+                minimum: 0
+                type: integer
+              ttl:
+                description: ttl in seconds. Left out, the zone's default applies
+                  and any TTL set at Simply.com is kept.
+                format: int32
+                minimum: 60
+                type: integer
+              type:
+                description: type of the record.
+                enum:
+                - A
+                - AAAA
+                - ALIAS
+                - CAA
+                - CNAME
+                - HTTPS
+                - LOC
+                - MX
+                - NS
+                - SRV
+                - SSHFP
+                - TLSA
+                - TXT
+                type: string
+              zone:
+                description: zone is the Simply.com product holding the DNS zone,
+                  which is the domain name, such as example.com.
+                minLength: 1
+                type: string
+                x-kubernetes-validations:
+                - message: zone is immutable
+                  rule: self == oldSelf
+            required:
+            - accountRef
+            - data
+            - name
+            - type
+            - zone
+            type: object
+            x-kubernetes-validations:
+            - message: priority is required for MX records
+              rule: self.type != 'MX' || has(self.priority)
+            - message: priority is required for SRV records
+              rule: self.type != 'SRV' || has(self.priority)
+          status:
+            description: DNSRecordStatus is the observed state of a DNSRecord.
+            properties:
+              conditions:
+                description: conditions; Ready is True when the record at Simply.com
+                  matches the spec.
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+              fqdn:
+                description: fqdn is the fully qualified name of the record.
+                type: string
+              lastSyncedTime:
+                description: lastSyncedTime is when the record was last confirmed
+                  to match the spec.
+                format: date-time
+                type: string
+              observedGeneration:
+                description: observedGeneration is the generation the status was computed
+                  from.
+                format: int64
+                type: integer
+              recordID:
+                description: recordID is Simply.com's id of the managed record.
+                format: int64
+                type: integer
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

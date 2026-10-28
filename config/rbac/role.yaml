@@ -1,0 +1,54 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: manager-role
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - get
+- apiGroups:
+  - events.k8s.io
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
+- apiGroups:
+  - simplycom.petersr.github.io
+  resources:
+  - accounts
+  - clusteraccounts
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - simplycom.petersr.github.io
+  resources:
+  - accounts/status
+  - clusteraccounts/status
+  - dnsrecords/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - simplycom.petersr.github.io
+  resources:
+  - dnsrecords
+  verbs:
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - simplycom.petersr.github.io
+  resources:
+  - dnsrecords/finalizers
+  verbs:
+  - update

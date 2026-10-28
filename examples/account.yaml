@@ -1,0 +1,33 @@
+# A Simply.com API key that only DNSRecords in the team-a namespace can use.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: simply-com
+  namespace: team-a
+stringData:
+  apiKey: replace-me
+---
+apiVersion: simplycom.petersr.github.io/v1alpha1
+kind: Account
+metadata:
+  name: simply-com
+  namespace: team-a
+spec:
+  apiKeySecretRef:
+    name: simply-com
+  zones:
+    - team-a.example
+---
+apiVersion: simplycom.petersr.github.io/v1alpha1
+kind: DNSRecord
+metadata:
+  name: www
+  namespace: team-a
+spec:
+  accountRef:
+    kind: Account
+    name: simply-com
+  zone: team-a.example
+  name: www
+  type: A
+  data: 192.0.2.10

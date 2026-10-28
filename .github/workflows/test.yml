@@ -1,0 +1,75 @@
+# The checks for every push and pull request; release.yml runs them again on a tag.
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_call:
+
+permissions: {}
+
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  go:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: generated files are up to date
+        run: make verify-generated
+      - name: go mod tidy
+        run: go mod tidy -diff
+      - name: lint
+        run: make lint-config lint
+      - name: unit and controller tests
+        run: make test
+      - name: govulncheck
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.1.4 ./...
+
+  chart:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+        with:
+          version: v3.22.0
+      - name: lint and render every value set
+        run: |
+          for values in charts/simply-com-operator/ci/*.yaml; do
+            echo "::group::$values"
+            helm lint --strict charts/simply-com-operator -f "$values"
+            helm template test charts/simply-com-operator -f "$values" > /dev/null
+            echo "::endgroup::"
+          done
+          helm template example examples/helm-chart > /dev/null
+
+  e2e:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+        with:
+          version: v3.22.0
+      - uses: helm/kind-action@1544676c07bb3570fcb70166beaa07c4528fd4aa # v1.15.1
+        with:
+          cluster_name: simply-com-operator-e2e
+      - name: chart and image on kind
+        run: hack/e2e-kind.sh

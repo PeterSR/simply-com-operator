@@ -1,0 +1,20 @@
+{{- if .Values.dns.enabled }}
+{{- range .Values.dns.hosts }}
+---
+apiVersion: simplycom.petersr.github.io/v1alpha1
+kind: DNSRecord
+metadata:
+  name: {{ $.Release.Name }}-{{ . }}
+  labels:
+    app.kubernetes.io/instance: {{ $.Release.Name }}
+spec:
+  accountRef:
+    name: {{ $.Values.dns.account }}
+  zone: {{ $.Values.dns.zone }}
+  name: {{ . }}.{{ $.Release.Name }}
+  type: CNAME
+  data: {{ $.Values.dns.target }}
+  ttl: {{ $.Values.dns.ttl }}
+  comment: {{ $.Release.Name }}
+{{- end }}
+{{- end }}

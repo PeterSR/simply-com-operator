@@ -1,0 +1,25 @@
+name: Bug report
+description: Something does not behave as the documentation says it should.
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: How to reproduce
+      description: The resources involved (with API keys removed), the record at Simply.com before and after, and the operator's log.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Operator version
+      placeholder: the image tag or chart version
+    validations:
+      required: true

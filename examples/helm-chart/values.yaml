@@ -1,0 +1,8 @@
+dns:
+  enabled: true
+  account: default
+  zone: example.com
+  # Every host becomes <host>.<release name>.<zone>, a CNAME to target.
+  target: ingress.example.net
+  hosts: [app, api]
+  ttl: 600

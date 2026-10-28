@@ -1,0 +1,4 @@
+resources:
+- simplycom_v1alpha1_clusteraccount.yaml
+- simplycom_v1alpha1_account.yaml
+- simplycom_v1alpha1_dnsrecord.yaml

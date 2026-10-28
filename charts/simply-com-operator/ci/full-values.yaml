@@ -1,0 +1,10 @@
+# Every optional part switched on.
+ownerID: cluster-a
+clusterAccount:
+  create: true
+  zones: [example.com]
+metrics:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+extraArgs: ["--zone-cache-ttl=5s"]
