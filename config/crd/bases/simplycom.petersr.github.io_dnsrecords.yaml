@@ -77,6 +77,7 @@ spec:
                     type: string
                   name:
                     description: name of the Account or ClusterAccount.
+                    maxLength: 253
                     minLength: 1
                     type: string
                 required:
@@ -119,17 +120,20 @@ spec:
                 description: |-
                   name of the record relative to the zone: "www", "_dmarc", "@" for the zone apex, "*" for a
                   wildcard. A fully qualified name inside the zone, such as www.example.com, is accepted too.
+                maxLength: 253
                 minLength: 1
                 type: string
               priority:
                 description: priority for MX and SRV records.
                 format: int32
+                maximum: 65535
                 minimum: 0
                 type: integer
               ttl:
                 description: ttl in seconds. Left out, the zone's default applies
                   and any TTL set at Simply.com is kept.
                 format: int32
+                maximum: 2147483647
                 minimum: 60
                 type: integer
               type:

@@ -139,6 +139,10 @@ func TestPlanRecord(t *testing.T) {
 				Comment: new(marker("me", "ns/www"))}, foreign(5, "A", "192.0.2.1", "")}, false, actionUpdate, 1, 0},
 		{"update into a copy of another object's record conflicts",
 			[]simply.DNSRecord{ours(1, "192.0.2.9"), foreign(5, "A", "192.0.2.1", marker("me", "ns/other"))}, false, actionConflict, 0, 0},
+		{"marker left by an earlier object on another type conflicts on first sync",
+			[]simply.DNSRecord{{ID: 1, Name: "www", Type: "TXT", Data: "x", Comment: new(marker("me", "ns/www"))}}, false, actionConflict, 0, 0},
+		{"marker left by an earlier object is taken with adopt",
+			[]simply.DNSRecord{{ID: 1, Name: "www", Type: "TXT", Data: "x", Comment: new(marker("me", "ns/www"))}}, true, actionUpdate, 1, 0},
 		{"unmanaged CNAME conflicts", []simply.DNSRecord{foreign(5, "CNAME", "x.example.net", "")}, true, actionConflict, 0, 0},
 	}
 	for _, c := range cases {
@@ -153,7 +157,7 @@ func TestPlanCNAMEOverOwnRecord(t *testing.T) {
 	spec := simplycomv1alpha1.DNSRecordSpec{Zone: "example.com", Name: "www", Type: "CNAME", Data: "lb.example.net"}
 	want := desiredRecord(&spec, "me", "ns/www")
 	zone := []simply.DNSRecord{{ID: 1, Name: "www", Type: "A", Data: "192.0.2.1", Comment: new(marker("me", "ns/www"))}}
-	p := planRecord(zone, want, "me", "ns/www", nil, false)
+	p := planRecord(zone, want, "me", "ns/www", new(int64(1)), false)
 	if p.action != actionUpdate || p.recordID != 1 {
 		t.Fatalf("changing the type of an owned record should update it, got %+v", p)
 	}

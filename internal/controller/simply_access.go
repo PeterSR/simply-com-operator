@@ -231,6 +231,8 @@ func (s *SimplyAccess) Wrote(acc *account, zone string) {
 // been reloaded since the process started. A failed reload stays pending, so the next sync of any
 // record in the zone tries again.
 func (s *SimplyAccess) PublishIfNeeded(ctx context.Context, acc *account, zone string) error {
+	// Check, reload, then clear without holding the lock: a write in between would be cleared too.
+	// That cannot happen while each controller runs one reconcile at a time, as it does.
 	k := zoneKey(acc, zone)
 	s.mu.Lock()
 	pending := s.unpublished[k] || !s.published[k]

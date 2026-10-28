@@ -39,6 +39,7 @@ type AccountReference struct {
 
 	// name of the Account or ClusterAccount.
 	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=253
 	Name string `json:"name"`
 }
 
@@ -74,6 +75,7 @@ type DNSRecordSpec struct {
 	// name of the record relative to the zone: "www", "_dmarc", "@" for the zone apex, "*" for a
 	// wildcard. A fully qualified name inside the zone, such as www.example.com, is accepted too.
 	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=253
 	Name string `json:"name"`
 
 	// type of the record.
@@ -87,11 +89,13 @@ type DNSRecordSpec struct {
 
 	// ttl in seconds. Left out, the zone's default applies and any TTL set at Simply.com is kept.
 	// +kubebuilder:validation:Minimum=60
+	// +kubebuilder:validation:Maximum=2147483647
 	// +optional
 	TTL *int32 `json:"ttl,omitempty"`
 
 	// priority for MX and SRV records.
 	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=65535
 	// +optional
 	Priority *int32 `json:"priority,omitempty"`
 

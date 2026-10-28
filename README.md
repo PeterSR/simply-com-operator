@@ -179,14 +179,18 @@ The operator was written to run against zones that also hold records made by han
   the object is let go anyway and the marker stays (a warning event says so).
 - A ClusterAccount whose `allowedNamespaces` no longer includes a namespace lets that namespace's
   `DNSRecord`s be deleted without touching their records, as does an account whose `zones` no
-  longer includes the zone.
+  longer includes the zone. A warning event says so.
+- A record whose marker was left behind that way is not taken over by a later object of the same
+  name if it has another name or type; that is a `Conflict` until the new object sets `adopt`.
 
 **Who may create records.** Anyone who can create a `DNSRecord` can add records to, and with
 `allowAdopt` take over, every zone of every account their namespace may use. Extra records at an
 existing name are allowed by design (several `A` or `TXT` values), so this includes, say, a second
 `A` record for the apex or an `_acme-challenge` TXT. Grant `DNSRecord` creation like you would grant
 access to the DNS itself: give ClusterAccounts `allowedNamespaces` and `zones`, and leave the chart's
-`rbac.aggregateToDefaultRoles` off unless every namespace editor should have that power.
+`rbac.aggregateToDefaultRoles` off unless every namespace editor should have that power. The
+`zones` and `allowAdopt` of a namespaced `Account` are guard rails for its own namespace, not a
+boundary: whoever may edit the Account, or read its Secret, can change them or use the key directly.
 
 **Owner id.** Every installation that may manage records in the same zone (one per cluster, and a
 cluster restored from another's backup) needs its own `ownerID`. Two installations with the same id
@@ -260,9 +264,12 @@ namespaced `Account`s.
 - A change made in the control panel to a managed record is undone at the next resync, not at once.
 - A zone whose reload failed is reloaded at the next sync of any record in it, and every zone is
   reloaded once after the operator starts, in case a change was stored but never published.
-- Record data is compared after normalising host names, addresses, SRV targets and TXT quotes.
-  For other types (CAA, TLSA, ...) write the data the way Simply.com returns it, or each resync
-  rewrites the record.
+- Record data is compared after normalising host names, addresses, SRV targets, TXT and CAA quotes
+  and TLSA/SSHFP hex case. For other types (HTTPS, LOC, ...) write the data the way Simply.com
+  returns it: otherwise each resync rewrites the record, and a hand-made record with the same value
+  is not recognised as one, so the operator adds a second record instead of reporting a conflict.
+- Uninstalling the chart keeps the CRDs and every `DNSRecord`, but nothing then removes their
+  finalizers. Delete the `DNSRecord`s (or set them to `Orphan`) before uninstalling.
 - If the account or its Secret is gone when a `DNSRecord` with `deletionPolicy: Delete` is deleted,
   deletion waits until it is back. Set `deletionPolicy: Orphan` on the object to let it go. Keep
   `Account`s and their Secrets out of the namespaces that are deleted together with their records,

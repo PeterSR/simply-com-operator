@@ -123,9 +123,12 @@ func normalizeData(recordType, data string) string {
 			fields[len(fields)-1] = hostname(fields[len(fields)-1])
 		}
 		return strings.Join(fields, " ")
-	case "TXT":
-		// Simply.com drops double quotes from TXT data.
+	case "TXT", "CAA":
+		// Simply.com drops double quotes from TXT data; CAA values are compared the same way.
 		return strings.ReplaceAll(data, "\"", "")
+	case "TLSA", "SSHFP":
+		// Hex digests, which may come back in either case.
+		return strings.ToLower(strings.Join(strings.Fields(data), " "))
 	}
 	return data
 }
@@ -222,6 +225,8 @@ type plan struct {
 	// duplicates are other records carrying this object's marker; they are deleted.
 	duplicates []int64
 	conflict   string
+	// adoptable is set on a conflict that spec.adopt would resolve.
+	adoptable bool
 }
 
 // planRecord decides what to do to make zone hold want for the object ref, managed by ownerID.
@@ -241,6 +246,14 @@ func planRecord(zone []simply.DNSRecord, want simply.DNSRecord, ownerID, ref str
 
 	if len(owned) > 0 {
 		keep := pickOwned(owned, want, preferID)
+		if preferID == nil && !adopt && (!strings.EqualFold(keep.Name, want.Name) || keep.Type != want.Type) {
+			// A marker this object never wrote: left behind when an earlier object of the same name
+			// was let go without reaching Simply.com. Rewriting that record into something else is
+			// not what anyone asked for.
+			return plan{action: actionConflict, adoptable: true, conflict: fmt.Sprintf(
+				"record %d (%s %s) carries this object's marker from an earlier object of the same name; "+
+					"set spec.adopt to take it over", keep.ID, keep.Type, keep.Name)}
+		}
 		p := plan{recordID: keep.ID, duplicates: duplicatesOf(owned, keep.ID), action: actionUpdate}
 		if inSync(keep, want) {
 			p.action = actionNone
@@ -271,7 +284,7 @@ func planRecord(zone []simply.DNSRecord, want simply.DNSRecord, ownerID, ref str
 				"record %d with the same name, type and data is managed by owner %q for %s", r.ID, o, rf)}
 		}
 		if !adopt {
-			return plan{action: actionConflict, conflict: fmt.Sprintf(
+			return plan{action: actionConflict, adoptable: true, conflict: fmt.Sprintf(
 				"record %d with the same name, type and data exists and is not managed by the operator; "+
 					"set spec.adopt to take it over", r.ID)}
 		}

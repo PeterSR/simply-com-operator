@@ -236,7 +236,7 @@ var _ = Describe("DNSRecord", Ordered, func() {
 		Expect(recordsNamed("orphan")()).To(HaveLen(1))
 	})
 
-	It("lets an Orphan object go when Simply.com cannot take the marker off", func() {
+	It("lets an Orphan object go when Simply.com cannot publish the marker's removal", func() {
 		obj := newRecord(simplycomv1alpha1.DNSRecordSpec{
 			Name: "orphan-down", Type: "A", Data: "192.0.2.13", DeletionPolicy: simplycomv1alpha1.DeletionPolicyOrphan,
 		})
@@ -296,9 +296,7 @@ var _ = Describe("DNSRecord", Ordered, func() {
 		key := types.NamespacedName{Namespace: obj.Namespace, Name: obj.Name}
 		Eventually(readyCondition(key), timeout, interval).Should(haveReason(metav1.ConditionFalse, simplycomv1alpha1.ReasonNotPermitted))
 		Expect(recordsNamed("outsider")()).To(BeEmpty())
-		Expect(k8sClient.Get(ctx, key, obj)).To(Succeed())
-		obj.Spec.DeletionPolicy = simplycomv1alpha1.DeletionPolicyOrphan
-		Expect(k8sClient.Update(ctx, obj)).To(Succeed())
+		// Delete policy: a namespace the account does not allow is let go without touching the zone.
 		deleteAndWait(obj)
 	})
 

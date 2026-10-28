@@ -115,7 +115,7 @@ func (r *DNSRecordReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		}
 		p = planRecord(records, want, r.OwnerID, ref, obj.Status.RecordID, adopt)
 	}
-	if p.action == actionConflict && obj.Spec.Adopt && !acc.allowAdopt {
+	if p.action == actionConflict && p.adoptable && obj.Spec.Adopt && !acc.allowAdopt {
 		p.conflict += "; spec.adopt has no effect because the account does not have allowAdopt"
 	}
 
@@ -185,7 +185,6 @@ func (r *DNSRecordReconciler) finalize(ctx context.Context, obj *simplycomv1alph
 	if !controllerutil.ContainsFinalizer(obj, Finalizer) {
 		return ctrl.Result{}, nil
 	}
-	log := logf.FromContext(ctx)
 	orphan := obj.Spec.DeletionPolicy == simplycomv1alpha1.DeletionPolicyOrphan
 	acc, err := r.Access.Resolve(ctx, obj.Namespace, obj.Spec.AccountRef)
 	if err != nil {
@@ -206,7 +205,8 @@ func (r *DNSRecordReconciler) finalize(ctx context.Context, obj *simplycomv1alph
 	zone := obj.Spec.Zone
 	if !acc.allowsZone(zone) {
 		// The account no longer lets the operator touch this zone, not even to clean up.
-		log.Info("zone not allowed by the account; leaving any record in place", "zone", zone)
+		r.Recorder.Eventf(obj, nil, corev1.EventTypeWarning, simplycomv1alpha1.ReasonZoneNotAllowed, "Delete",
+			"the account no longer allows zone %s; any record is left in the zone as it is, with the ownership marker", zone)
 		return r.release(ctx, obj)
 	}
 
@@ -227,10 +227,12 @@ func (r *DNSRecordReconciler) finalize(ctx context.Context, obj *simplycomv1alph
 func (r *DNSRecordReconciler) releaseRecords(ctx context.Context, acc *account, zone, ref string, orphan bool) error {
 	r.Access.ForgetZone(acc, zone)
 	records, _, err := r.Access.ListZone(ctx, acc, zone)
+	if simply.IsNotFound(err) {
+		// The zone is gone from the account, and with it any record.
+		logf.FromContext(ctx).Info("zone not found at Simply.com; nothing to release", "zone", zone)
+		return nil
+	}
 	if err != nil {
-		if simply.IsNotFound(err) {
-			return nil
-		}
 		return err
 	}
 	for _, rec := range records {
