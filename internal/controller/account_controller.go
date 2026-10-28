@@ -57,7 +57,10 @@ func (r *AccountReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		}
 		ref := simplycomv1alpha1.AccountReference{Kind: simplycomv1alpha1.AccountKindNamespaced, Name: acc.Name}
 		retry := r.check(ctx, acc.Namespace, ref, acc.Generation, &acc.Status)
-		return ctrl.Result{RequeueAfter: retry}, r.Status().Update(ctx, &acc)
+		if err := r.Status().Update(ctx, &acc); err != nil {
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{RequeueAfter: retry}, nil
 	}
 	var acc simplycomv1alpha1.ClusterAccount
 	if err := r.Get(ctx, req.NamespacedName, &acc); err != nil {
@@ -65,7 +68,10 @@ func (r *AccountReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	}
 	ref := simplycomv1alpha1.AccountReference{Kind: simplycomv1alpha1.AccountKindCluster, Name: acc.Name}
 	retry := r.check(ctx, "", ref, acc.Generation, &acc.Status)
-	return ctrl.Result{RequeueAfter: retry}, r.Status().Update(ctx, &acc)
+	if err := r.Status().Update(ctx, &acc); err != nil {
+		return ctrl.Result{}, err
+	}
+	return ctrl.Result{RequeueAfter: retry}, nil
 }
 
 func (r *AccountReconciler) check(ctx context.Context, namespace string, ref simplycomv1alpha1.AccountReference,

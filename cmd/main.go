@@ -72,9 +72,10 @@ func main() {
 	flag.BoolVar(&enableHTTP2, "enable-http2", false, "Allow HTTP/2 on the metrics server.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "Address the health probes bind to.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false, "Use leader election, so only one replica works at a time.")
-	flag.StringVar(&ownerID, "owner-id", "default",
-		"Identifies this installation in the ownership marker of the records it manages. Installations "+
-			"sharing a Simply.com zone must use different ids.")
+	flag.StringVar(&ownerID, "owner-id", "",
+		"Required. Identifies this installation in the ownership marker of the records it manages. "+
+			"Every installation that may share a Simply.com zone, including a copy restored from a backup, "+
+			"must use its own.")
 	flag.StringVar(&apiURL, "simply-api-url", simply.DefaultBaseURL, "Simply.com API base URL.")
 	flag.StringVar(&clusterNS, "cluster-resource-namespace", "",
 		"Namespace of ClusterAccount secrets that name none. Defaults to the namespace the operator runs in.")
@@ -99,7 +100,7 @@ func main() {
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
 	if !controller.ValidOwnerID(ownerID) {
-		setupLog.Error(nil, "--owner-id must be 1 to 63 letters, digits, '.', '_' or '-'", "owner-id", ownerID)
+		setupLog.Error(nil, "--owner-id is required: 1 to 63 letters, digits, '.', '_' or '-'", "owner-id", ownerID)
 		os.Exit(1)
 	}
 	if clusterNS == "" {

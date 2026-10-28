@@ -11,3 +11,8 @@ spec:
   # Optional: the only zones records using this account may change.
   zones:
     - example.com
+  # Optional: the only namespaces whose DNSRecords may use this account.
+  allowedNamespaces:
+    - shop
+  # Optional: let DNSRecords take over records made by hand (spec.adopt).
+  allowAdopt: false

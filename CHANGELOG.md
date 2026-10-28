@@ -16,9 +16,10 @@ The first release.
   corrected (also after edits in the control panel, at each resync) and removed with the object.
   `deletionPolicy: Orphan` leaves the record behind; `adopt: true` takes over an existing record.
 - `ClusterAccount` and `Account`: the Simply.com API key, for the whole cluster or one namespace,
-  with an optional list of the zones it may change.
+  with an optional list of the zones it may change, `allowedNamespaces` for a ClusterAccount, and
+  `allowAdopt` (off by default) to permit taking over records made by hand.
 - Ownership marker in the record comment, so the operator only ever changes or deletes records it
-  created or adopted, and finds them again after a backup restore.
+  created or adopted, and finds them again after a backup restore. The owner id is required.
 - Helm chart at `oci://ghcr.io/petersr/charts/simply-com-operator` and image at
   `ghcr.io/petersr/simply-com-operator`, for linux/amd64 and linux/arm64.
 

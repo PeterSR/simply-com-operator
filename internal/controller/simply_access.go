@@ -56,6 +56,8 @@ type SimplyAccess struct {
 
 	mu    sync.Mutex
 	zones map[string]zoneEntry
+	// unpublished holds zones written to since their last successful reload.
+	unpublished map[string]bool
 }
 
 type zoneEntry struct {
@@ -86,8 +88,9 @@ func reasonFor(err error) string {
 
 // account is a resolved Account or ClusterAccount.
 type account struct {
-	client *simply.Client
-	zones  []string
+	client     *simply.Client
+	zones      []string
+	allowAdopt bool
 	// cacheKey identifies the API key without holding it.
 	cacheKey string
 }
@@ -99,7 +102,8 @@ func (a *account) allowsZone(zone string) bool {
 	return slices.ContainsFunc(a.zones, func(z string) bool { return strings.EqualFold(z, zone) })
 }
 
-// Resolve finds the account ref names for an object in namespace and reads its API key.
+// Resolve finds the account ref names for an object in namespace and reads its API key. An empty
+// namespace skips the ClusterAccount's namespace check, for the account's own controller.
 func (s *SimplyAccess) Resolve(ctx context.Context, namespace string, ref simplycomv1alpha1.AccountReference) (*account, error) {
 	var spec simplycomv1alpha1.AccountSpec
 	var secretKey types.NamespacedName
@@ -125,6 +129,10 @@ func (s *SimplyAccess) Resolve(ctx context.Context, namespace string, ref simply
 			}
 			return nil, err
 		}
+		if namespace != "" && len(acc.Spec.AllowedNamespaces) > 0 && !slices.Contains(acc.Spec.AllowedNamespaces, namespace) {
+			return nil, accountError(simplycomv1alpha1.ReasonNotPermitted,
+				"ClusterAccount %s does not allow namespace %s", ref.Name, namespace)
+		}
 		spec = acc.Spec.AccountSpec
 		ns := acc.Spec.APIKeySecretRef.Namespace
 		if ns == "" {
@@ -139,7 +147,12 @@ func (s *SimplyAccess) Resolve(ctx context.Context, namespace string, ref simply
 		return nil, err
 	}
 	sum := sha256.Sum256([]byte(apiKey))
-	return &account{client: s.NewClient(apiKey), zones: spec.Zones, cacheKey: hex.EncodeToString(sum[:8])}, nil
+	return &account{
+		client:     s.NewClient(apiKey),
+		zones:      spec.Zones,
+		allowAdopt: spec.AllowAdopt,
+		cacheKey:   hex.EncodeToString(sum[:8]),
+	}, nil
 }
 
 func (s *SimplyAccess) readSecret(ctx context.Context, name types.NamespacedName, key string) (string, error) {
@@ -189,4 +202,35 @@ func (s *SimplyAccess) ForgetZone(acc *account, zone string) {
 	s.mu.Lock()
 	delete(s.zones, acc.cacheKey+"/"+strings.ToLower(zone))
 	s.mu.Unlock()
+}
+
+// Wrote records a write to zone: its listing is stale, and it must be reloaded to be published.
+func (s *SimplyAccess) Wrote(acc *account, zone string) {
+	k := acc.cacheKey + "/" + strings.ToLower(zone)
+	s.mu.Lock()
+	delete(s.zones, k)
+	if s.unpublished == nil {
+		s.unpublished = map[string]bool{}
+	}
+	s.unpublished[k] = true
+	s.mu.Unlock()
+}
+
+// PublishIfNeeded reloads zone if it was written to since its last successful reload. A failed
+// reload stays pending, so the next sync of any record in the zone tries again.
+func (s *SimplyAccess) PublishIfNeeded(ctx context.Context, acc *account, zone string) error {
+	k := acc.cacheKey + "/" + strings.ToLower(zone)
+	s.mu.Lock()
+	pending := s.unpublished[k]
+	s.mu.Unlock()
+	if !pending {
+		return nil
+	}
+	if err := acc.client.ReloadDNSZone(ctx, zone); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	delete(s.unpublished, k)
+	s.mu.Unlock()
+	return nil
 }

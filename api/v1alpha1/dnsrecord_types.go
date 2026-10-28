@@ -60,6 +60,7 @@ const (
 // DNSRecordSpec is the desired state of one record in a Simply.com DNS zone.
 // +kubebuilder:validation:XValidation:rule="self.type != 'MX' || has(self.priority)",message="priority is required for MX records"
 // +kubebuilder:validation:XValidation:rule="self.type != 'SRV' || has(self.priority)",message="priority is required for SRV records"
+// +kubebuilder:validation:XValidation:rule="!has(self.priority) || self.type in ['MX', 'SRV']",message="priority is only for MX and SRV records"
 type DNSRecordSpec struct {
 	// accountRef names the account whose API key is used.
 	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="accountRef is immutable"
@@ -101,14 +102,16 @@ type DNSRecordSpec struct {
 	Comment string `json:"comment,omitempty"`
 
 	// deletionPolicy says whether deleting this object removes the record (Delete, the default) or
-	// leaves it in the zone (Orphan).
+	// leaves it in the zone (Orphan). An orphaned record loses the ownership marker, so no later
+	// object takes it over unless it adopts it.
 	// +kubebuilder:default=Delete
 	// +optional
 	DeletionPolicy DeletionPolicy `json:"deletionPolicy,omitempty"`
 
 	// adopt lets the operator take over an existing record that is not marked as managed but has
 	// exactly this name, type and data. Without it such a record is reported as a conflict and left
-	// alone. The operator never changes or deletes a record it does not manage.
+	// alone. The account must have allowAdopt. The operator never changes or deletes a record it
+	// does not manage.
 	// +optional
 	Adopt bool `json:"adopt,omitempty"`
 }

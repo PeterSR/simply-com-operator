@@ -19,9 +19,11 @@ crds:
   # Keep the CustomResourceDefinitions, and with them every DNSRecord, when the chart is uninstalled.
   keep: true
 
-# Identifies this installation in the ownership marker the operator writes into the comment of
-# every record it manages. Installations that share a Simply.com zone must use different ids.
-ownerID: default
+# Required. Identifies this installation in the ownership marker the operator writes into the
+# comment of every record it manages. Every installation that may share a Simply.com zone, including
+# a cluster restored from another's backup, must have its own, such as the cluster's name. Records
+# keep the id they were created with, so choose it once.
+ownerID: ""
 
 # Simply.com API settings.
 simplyAPI:
@@ -37,21 +39,11 @@ retryInterval: 1m
 # How often an account's API key is checked again.
 accountCheckInterval: 1h
 
-# Optionally create a ClusterAccount with the chart. The Secret is not created by the chart: make
-# it yourself (or with a secret manager) in the release namespace, holding the API key under
-# secretKey.
-clusterAccount:
-  create: false
-  name: default
-  secretName: simply-com-api-key
-  secretKey: apiKey
-  # Products (domain names) the account may change. Empty allows every product the key reaches.
-  zones: []
-
 rbac:
-  # Add DNSRecord and Account permissions to the built-in admin, edit and view ClusterRoles, so
-  # namespace users can manage records without extra grants.
-  aggregateToDefaultRoles: true
+  # Add DNSRecord and Account permissions to the built-in admin, edit and view ClusterRoles. Anyone
+  # who can then create a DNSRecord can change the zones of every account their namespace may use,
+  # so restrict ClusterAccounts with allowedNamespaces before turning this on.
+  aggregateToDefaultRoles: false
 
 logLevel: info
 

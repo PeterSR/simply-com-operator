@@ -44,6 +44,8 @@ type Server struct {
 	nextID  int64
 	reloads map[string]int
 	calls   map[string]int
+	// failReloads is how many reloads to refuse before accepting them again.
+	failReloads int
 }
 
 // NewServer starts a fake that accepts apiKey and serves the given zones, initially empty.
@@ -99,6 +101,13 @@ func (s *Server) Reloads(zone string) int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.reloads[zone]
+}
+
+// FailReloads makes the next n reloads answer 503.
+func (s *Server) FailReloads(n int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.failReloads = n
 }
 
 // Calls is how many requests have been made with the given method, such as "POST".
@@ -181,6 +190,11 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 	rest := parts[5:]
 	switch {
 	case len(rest) == 1 && rest[0] == "reload" && r.Method == http.MethodPost:
+		if s.failReloads > 0 {
+			s.failReloads--
+			problem(w, http.StatusServiceUnavailable, "Service Unavailable")
+			return
+		}
 		s.reloads[zone]++
 		writeJSON(w, http.StatusOK, map[string]any{"status": 200, "message": "success"})
 	case len(rest) == 1 && rest[0] == "records" && r.Method == http.MethodGet:

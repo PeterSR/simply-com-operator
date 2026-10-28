@@ -1,8 +1,7 @@
 # Every optional part switched on.
 ownerID: cluster-a
-clusterAccount:
-  create: true
-  zones: [example.com]
+rbac:
+  aggregateToDefaultRoles: true
 metrics:
   enabled: true
   serviceMonitor:

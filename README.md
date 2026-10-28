@@ -57,8 +57,12 @@ The chart and the image are published to GitHub Container Registry.
 
 ```bash
 helm install simply-com-operator oci://ghcr.io/petersr/charts/simply-com-operator \
-  --namespace simply-com-operator --create-namespace
+  --namespace simply-com-operator --create-namespace \
+  --set ownerID=my-cluster
 ```
+
+`ownerID` is required: it names this installation in the marker on every record it manages (see
+[Safety](#safety-what-the-operator-will-and-will-not-touch)).
 
 The chart installs the CustomResourceDefinitions too (`crds.install`), and keeps them on uninstall
 (`crds.keep`) so that uninstalling the chart does not delete every `DNSRecord`. To install the
@@ -83,8 +87,10 @@ spec:
   apiKeySecretRef:
     name: simply-com-api-key
     namespace: simply-com-operator
-  zones:            # optional: the only zones this account may change
+  zones:              # optional: the only zones this account may change
     - example.com
+  allowedNamespaces:  # optional: the only namespaces whose records may use it
+    - shop
 ```
 
 ```console
@@ -92,9 +98,6 @@ $ kubectl get clusteraccounts
 NAME      READY   REASON          AGE
 default   True    Authenticated   5s
 ```
-
-The chart can create the ClusterAccount for you (`clusterAccount.create=true`); the Secret it leaves
-to you or your secret manager.
 
 ## Accounts
 
@@ -111,6 +114,8 @@ Both have:
 | `spec.apiKeySecretRef.key` | the key in it; default `apiKey` |
 | `spec.apiKeySecretRef.namespace` | `ClusterAccount` only; default the operator's namespace |
 | `spec.zones` | if set, the only zones (Simply.com products) records using this account may change |
+| `spec.allowAdopt` | let records using this account take over records made by hand (`adopt`); default off |
+| `spec.allowedNamespaces` | `ClusterAccount` only: if set, the only namespaces whose records may use it |
 
 The status reports whether Simply.com accepted the key (`Ready`) and which products it can reach
 (`status.products`). The key is read when it is used, so a rotated Secret takes effect at once.
@@ -128,8 +133,8 @@ The status reports whether Simply.com accepted the key (`Ready`) and which produ
 | `ttl` | seconds, at least 60. Left out, the zone's default applies and a TTL set at Simply.com is kept. |
 | `priority` | required for `MX` and `SRV` |
 | `comment` | shown in the control panel, before the operator's marker |
-| `deletionPolicy` | `Delete` (default) removes the record with the object; `Orphan` leaves it in the zone |
-| `adopt` | take over an existing, unmarked record with exactly this name, type and data, instead of reporting a conflict |
+| `deletionPolicy` | `Delete` (default) removes the record with the object; `Orphan` leaves it in the zone, without the marker |
+| `adopt` | take over an existing, unmarked record with exactly this name, type and data, instead of reporting a conflict. The account must have `allowAdopt`. |
 
 ```console
 $ kubectl get dnsrecords -A
@@ -143,6 +148,7 @@ shop        shop   shop.example.com   CNAME   True    Synced   1m
 |---|---|
 | `AccountNotFound`, `SecretNotFound` | the account or its Secret is missing; retried, and picked up when it appears |
 | `ZoneNotAllowed` | the account's `zones` does not include the zone |
+| `NotPermitted` | the ClusterAccount's `allowedNamespaces` leaves out this namespace, or `adopt` is set and the account lacks `allowAdopt` |
 | `InvalidSpec` | for example an `A` record whose data is not an IPv4 address, or a CNAME at the apex |
 | `Conflict` | another record stands in the way; the message says which (see below) |
 | `APIError` | Simply.com refused or failed the request; the message has its answer |
@@ -158,8 +164,9 @@ The operator was written to run against zones that also hold records made by han
 - It only ever **updates or deletes records carrying its own marker** for that exact object and
   owner id. Deleting a `DNSRecord` that never managed a record deletes nothing.
 - A record with the same name, type and data that is **not** marked is a `Conflict`, and is left as
-  it is. Set `adopt: true` to take it over; the operator then rewrites its comment to the spec's
-  comment plus the marker, and from then on manages (and on deletion removes) it.
+  it is. Set `adopt: true` to take it over (the account needs `allowAdopt`); the operator then
+  rewrites its comment to the spec's comment plus the marker, and from then on manages (and on
+  deletion removes) it. A managed record is never changed into a copy of an unmarked one.
 - A record marked by another installation or another object is always a `Conflict`, also with `adopt`.
 - A `CNAME` cannot share its name with another record. Wanting a CNAME where an unmanaged record
   exists, or another record where an unmanaged CNAME exists, is a `Conflict`.
@@ -167,10 +174,20 @@ The operator was written to run against zones that also hold records made by han
   creates or changes anything.
 - With `spec.zones` on the account, records outside those zones are neither written nor read, also
   when the `DNSRecord` is deleted.
+- `deletionPolicy: Orphan` removes the marker as it lets go, so a later object with the same name
+  does not quietly take the record over.
 
-**Owner id.** If more than one installation (say, one per cluster) manages records in the same zone,
-give each a different `ownerID` in the chart values. Records keep the owner id they were created
-with, so changing it later turns the existing records into conflicts.
+**Who may create records.** Anyone who can create a `DNSRecord` can add records to, and with
+`allowAdopt` take over, every zone of every account their namespace may use. Extra records at an
+existing name are allowed by design (several `A` or `TXT` values), so this includes, say, a second
+`A` record for the apex or an `_acme-challenge` TXT. Grant `DNSRecord` creation like you would grant
+access to the DNS itself: give ClusterAccounts `allowedNamespaces` and `zones`, and leave the chart's
+`rbac.aggregateToDefaultRoles` off unless every namespace editor should have that power.
+
+**Owner id.** Every installation that may manage records in the same zone (one per cluster, and a
+cluster restored from another's backup) needs its own `ownerID`. Two installations with the same id
+would each treat the other's records as their own. Records keep the id they were created with, so
+changing it later turns the existing records into conflicts.
 
 ## Declaring records from your own Helm charts
 
@@ -215,15 +232,14 @@ uninstalling it removes them. The full example is in [examples/helm-chart/](exam
 
 | Chart value | Flag | Default | |
 |---|---|---|---|
-| `ownerID` | `--owner-id` | `default` | written into every marker; see above |
+| `ownerID` | `--owner-id` | required | written into every marker; see above |
 | `simplyAPI.url` | `--simply-api-url` | `https://api.simply.com/2` | |
 | `simplyAPI.rateLimit`, `simplyAPI.burst` | `--api-rate-limit`, `--api-burst` | `5`, `10` | requests per second to Simply.com, for the whole operator |
 | `resyncInterval` | `--resync-interval` | `10m` | how often a record in sync is checked again, undoing changes made in the control panel |
 | `retryInterval` | `--retry-interval` | `1m` | wait after a problem only you or Simply.com can fix |
 | `accountCheckInterval` | `--account-check-interval` | `1h` | how often an account's key is checked again |
 | | `--zone-cache-ttl` | `10s` | how long a zone listing is reused when nothing needs changing |
-| `clusterAccount.*` | | off | create a `ClusterAccount` with the chart |
-| `rbac.aggregateToDefaultRoles` | | `true` | let users with the built-in `edit`/`view` roles manage `DNSRecord`s and `Account`s |
+| `rbac.aggregateToDefaultRoles` | | `false` | let users with the built-in `edit`/`view` roles manage `DNSRecord`s and `Account`s |
 | `metrics.enabled` | `--metrics-bind-address` | off | Prometheus metrics on `:8080`, optionally with a `ServiceMonitor` |
 
 See [values.yaml](charts/simply-com-operator/values.yaml) for the rest.
@@ -238,6 +254,12 @@ namespaced `Account`s.
   needs changing, and shares a recent listing between records otherwise. Very large zones with many
   managed records will make many requests at startup; the rate limit keeps them in bounds.
 - A change made in the control panel to a managed record is undone at the next resync, not at once.
+- A zone whose reload failed is reloaded at the next sync of any record in it; the operator keeps
+  that in memory, so a restart in between leaves the change unpublished until the zone is next
+  written to.
+- Record data is compared after normalising host names, addresses, SRV targets and TXT quotes.
+  For other types (CAA, TLSA, ...) write the data the way Simply.com returns it, or each resync
+  rewrites the record.
 - If the account or its Secret is gone when a `DNSRecord` with `deletionPolicy: Delete` is deleted,
   deletion waits until it is back. Set `deletionPolicy: Orphan` on the object to let it go. Keep
   `Account`s and their Secrets out of the namespaces that are deleted together with their records,

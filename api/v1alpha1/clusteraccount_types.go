@@ -42,6 +42,13 @@ type ClusterAccountSpec struct {
 
 	// apiKeySecretRef points at the Secret holding a Simply.com API key.
 	APIKeySecretRef ClusterSecretKeySelector `json:"apiKeySecretRef"`
+
+	// allowedNamespaces are the namespaces whose objects may use this account. Empty allows every
+	// namespace, which gives everyone allowed to create DNSRecords anywhere in the cluster the
+	// power to change the account's zones.
+	// +optional
+	// +listType=set
+	AllowedNamespaces []string `json:"allowedNamespaces,omitempty"`
 }
 
 // +kubebuilder:object:root=true

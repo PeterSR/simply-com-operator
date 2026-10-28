@@ -1,5 +1,4 @@
 simply-com-operator {{ .Chart.AppVersion }} is installed in {{ .Release.Namespace }} with owner id "{{ .Values.ownerID }}".
-{{- if not .Values.clusterAccount.create }}
 
 Next, store a Simply.com API key (Account, API keys in the control panel) and create an account:
 
@@ -14,7 +13,6 @@ Next, store a Simply.com API key (Account, API keys in the control panel) and cr
       name: simply-com-api-key
       namespace: {{ .Release.Namespace }}
   YAML
-{{- end }}
 
 Then declare records:
 
@@ -25,7 +23,7 @@ Then declare records:
     name: www
   spec:
     accountRef:
-      name: {{ .Values.clusterAccount.name }}
+      name: default
     zone: example.com
     name: www
     type: CNAME

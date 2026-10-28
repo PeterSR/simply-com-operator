@@ -92,7 +92,8 @@ spec:
                 description: |-
                   adopt lets the operator take over an existing record that is not marked as managed but has
                   exactly this name, type and data. Without it such a record is reported as a conflict and left
-                  alone. The operator never changes or deletes a record it does not manage.
+                  alone. The account must have allowAdopt. The operator never changes or deletes a record it
+                  does not manage.
                 type: boolean
               comment:
                 description: |-
@@ -111,7 +112,8 @@ spec:
                 default: Delete
                 description: |-
                   deletionPolicy says whether deleting this object removes the record (Delete, the default) or
-                  leaves it in the zone (Orphan).
+                  leaves it in the zone (Orphan). An orphaned record loses the ownership marker, so no later
+                  object takes it over unless it adopts it.
                 enum:
                 - Delete
                 - Orphan
@@ -170,6 +172,8 @@ spec:
               rule: self.type != 'MX' || has(self.priority)
             - message: priority is required for SRV records
               rule: self.type != 'SRV' || has(self.priority)
+            - message: priority is only for MX and SRV records
+              rule: '!has(self.priority) || self.type in [''MX'', ''SRV'']'
           status:
             description: DNSRecordStatus is the observed state of a DNSRecord.
             properties:

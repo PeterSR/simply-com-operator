@@ -70,7 +70,7 @@ test-e2e: ## Smoke-test the image and the chart on a kind cluster.
 
 .PHONY: verify-generated
 verify-generated: manifests generate ## Fail if generated code, CRDs, RBAC or the chart copies are out of date.
-	git diff --exit-code -- api config charts
+	@test -z "$$(git status --porcelain -- api config charts)" || { git status --porcelain -- api config charts; git diff -- api config charts; exit 1; }
 
 .PHONY: lint
 lint: golangci-lint ## Run golangci-lint linter

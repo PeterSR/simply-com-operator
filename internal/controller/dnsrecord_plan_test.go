@@ -45,6 +45,13 @@ func TestMarkerRoundTrip(t *testing.T) {
 	if !ok || o != "prod" || r != "ns/www" {
 		t.Fatalf("parse: %v %q %q", ok, o, r)
 	}
+	if got := commentWithoutMarker(&c); got == nil || *got != "web server" {
+		t.Fatalf("without marker: %v", got)
+	}
+	bare := marker("prod", "ns/www")
+	if commentWithoutMarker(&bare) != nil {
+		t.Fatal("a bare marker should leave no comment")
+	}
 	for _, s := range []string{"", "web", "[simply-com-operator owner=a]", "x [simply-com-operator owner=a ref=b/c] trailing"} {
 		if _, _, ok := parseMarker(&s); ok {
 			t.Errorf("%q parsed as a marker", s)
@@ -125,6 +132,8 @@ func TestPlanRecord(t *testing.T) {
 		{"unmanaged match conflicts", []simply.DNSRecord{foreign(5, "A", "192.0.2.1", "web")}, false, actionConflict, 0, 0},
 		{"unmanaged match adopted", []simply.DNSRecord{foreign(5, "A", "192.0.2.1", "web")}, true, actionUpdate, 5, 0},
 		{"other owner conflicts even with adopt", []simply.DNSRecord{foreign(5, "A", "192.0.2.1", marker("other", "ns/www"))}, true, actionConflict, 0, 0},
+		{"update into a copy of an unmanaged record conflicts",
+			[]simply.DNSRecord{ours(1, "192.0.2.9"), foreign(5, "A", "192.0.2.1", "")}, false, actionConflict, 0, 0},
 		{"unmanaged CNAME conflicts", []simply.DNSRecord{foreign(5, "CNAME", "x.example.net", "")}, true, actionConflict, 0, 0},
 	}
 	for _, c := range cases {

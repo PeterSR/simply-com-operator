@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Smoke test of the chart and the image on a kind cluster, without talking to Simply.com: the chart
-# installs, the operator starts, the CRDs validate, and records report the problems they should.
+# Smoke test of the chart and the image on a kind cluster, without talking to Simply.com (the API
+# URL points at a closed port): the chart installs, the operator starts, the CRDs validate, and
+# records report the problems they should.
 #
 #   hack/e2e-kind.sh            create a cluster, test, delete the cluster
 #   KEEP_CLUSTER=1 hack/e2e-kind.sh
@@ -32,12 +33,21 @@ kubectl -n "$ns" create secret generic simply-com-api-key --from-literal=apiKey=
   --dry-run=client -o yaml | kubectl apply -f -
 helm upgrade --install simply-com-operator "$root/charts/simply-com-operator" -n "$ns" \
   --set image.repository=simply-com-operator --set image.tag=e2e --set image.pullPolicy=Never \
-  --set clusterAccount.create=true --set 'clusterAccount.zones={example.com}' \
+  --set ownerID=e2e --set simplyAPI.url=http://127.0.0.1:9 \
   --set retryInterval=5s --wait --timeout 3m
+kubectl apply -f - <<YAML
+apiVersion: simplycom.petersr.github.io/v1alpha1
+kind: ClusterAccount
+metadata: {name: default}
+spec:
+  apiKeySecretRef: {name: simply-com-api-key, namespace: $ns}
+  zones: [example.com]
+  allowedNamespaces: [default]
+YAML
 
-wait_reason() { # object, reason
+wait_reason() { # object, reason, [kubectl flags]
   for _ in $(seq 1 60); do
-    got=$(kubectl get "$1" -o jsonpath='{.status.conditions[?(@.type=="Ready")].reason}' 2>/dev/null || true)
+    got=$(kubectl get "$1" "${@:3}" -o jsonpath='{.status.conditions[?(@.type=="Ready")].reason}' 2>/dev/null || true)
     if [ "$got" = "$2" ]; then
       echo "ok: $1 is $2"
       return 0
@@ -54,6 +64,7 @@ apiVersion: simplycom.petersr.github.io/v1alpha1
 kind: DNSRecord
 metadata: {name: no-account, namespace: default}
 spec:
+  deletionPolicy: Orphan
   accountRef: {name: missing}
   zone: example.com
   name: www
@@ -64,6 +75,7 @@ apiVersion: simplycom.petersr.github.io/v1alpha1
 kind: DNSRecord
 metadata: {name: bad-address, namespace: default}
 spec:
+  deletionPolicy: Orphan
   accountRef: {name: default}
   zone: example.com
   name: www
@@ -84,6 +96,21 @@ wait_reason dnsrecord/no-account AccountNotFound
 wait_reason dnsrecord/bad-address InvalidSpec
 wait_reason dnsrecord/other-zone ZoneNotAllowed
 
+kubectl create namespace outsider --dry-run=client -o yaml | kubectl apply -f -
+kubectl apply -f - <<'YAML'
+apiVersion: simplycom.petersr.github.io/v1alpha1
+kind: DNSRecord
+metadata: {name: not-permitted, namespace: outsider}
+spec:
+  accountRef: {name: default}
+  zone: example.com
+  name: www
+  type: A
+  data: 192.0.2.1
+  deletionPolicy: Orphan
+YAML
+wait_reason dnsrecord/not-permitted NotPermitted -n outsider
+
 if kubectl apply -f - <<'YAML' 2>/dev/null; then
 apiVersion: simplycom.petersr.github.io/v1alpha1
 kind: DNSRecord
@@ -100,8 +127,9 @@ YAML
 fi
 echo "ok: MX without priority refused"
 
-# Nothing was ever created at Simply.com, so deletion must not need it.
+# Orphan, or a zone the account does not allow: deleting needs nothing from Simply.com.
 kubectl delete dnsrecord no-account bad-address other-zone --timeout=60s
+kubectl -n outsider delete dnsrecord not-permitted --timeout=60s
 helm uninstall simply-com-operator -n "$ns" --wait
 kubectl get crd dnsrecords.simplycom.petersr.github.io >/dev/null
 echo "ok: CRDs kept after uninstall"

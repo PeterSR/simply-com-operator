@@ -70,7 +70,7 @@ spec:
   data: 60 5060 sip.example.com
 ---
 # Take over a record that was made by hand, instead of reporting a conflict, and leave it in the
-# zone when this object is deleted.
+# zone when this object is deleted. The account needs allowAdopt.
 apiVersion: simplycom.petersr.github.io/v1alpha1
 kind: DNSRecord
 metadata:

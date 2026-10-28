@@ -44,7 +44,7 @@ spec:
             - --metrics-bind-address=:{{ .Values.metrics.port }}
             - --metrics-secure=false
             {{- end }}
-            - --owner-id={{ .Values.ownerID }}
+            - --owner-id={{ required "ownerID is required: a name for this installation, such as the cluster's" .Values.ownerID }}
             - --simply-api-url={{ .Values.simplyAPI.url }}
             - --api-rate-limit={{ .Values.simplyAPI.rateLimit }}
             - --api-burst={{ .Values.simplyAPI.burst }}

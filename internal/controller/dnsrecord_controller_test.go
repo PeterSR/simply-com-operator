@@ -96,6 +96,7 @@ var _ = Describe("DNSRecord", Ordered, func() {
 		Expect(k8sClient.Create(ctx, &simplycomv1alpha1.ClusterAccount{
 			ObjectMeta: metav1.ObjectMeta{Name: "main"},
 			Spec: simplycomv1alpha1.ClusterAccountSpec{
+				AccountSpec:     simplycomv1alpha1.AccountSpec{AllowAdopt: true},
 				APIKeySecretRef: simplycomv1alpha1.ClusterSecretKeySelector{Name: "simply"},
 			},
 		})).To(Succeed())
@@ -214,14 +215,75 @@ var _ = Describe("DNSRecord", Ordered, func() {
 		deleteAndWait(obj)
 	})
 
-	It("keeps the record with deletionPolicy Orphan", func() {
+	It("keeps the record with deletionPolicy Orphan, without the marker", func() {
 		obj := newRecord(simplycomv1alpha1.DNSRecordSpec{
-			Name: "orphan", Type: "A", Data: "192.0.2.7", DeletionPolicy: simplycomv1alpha1.DeletionPolicyOrphan,
+			Name: "orphan", Type: "A", Data: "192.0.2.7", Comment: "keep", DeletionPolicy: simplycomv1alpha1.DeletionPolicyOrphan,
 		})
 		Expect(k8sClient.Create(ctx, obj)).To(Succeed())
 		Eventually(recordsNamed("orphan"), timeout, interval).Should(HaveLen(1))
 		deleteAndWait(obj)
+		recs := recordsNamed("orphan")()
+		Expect(recs).To(HaveLen(1))
+		Expect(recs[0].Comment).To(Equal(new("keep")))
+
+		// A later object of the same name does not take the orphan over unasked.
+		again := newRecord(simplycomv1alpha1.DNSRecordSpec{Name: "orphan", Type: "A", Data: "192.0.2.7"})
+		again.Name = obj.Name
+		Expect(k8sClient.Create(ctx, again)).To(Succeed())
+		key := types.NamespacedName{Namespace: again.Namespace, Name: again.Name}
+		Eventually(readyCondition(key), timeout, interval).Should(haveReason(metav1.ConditionFalse, simplycomv1alpha1.ReasonConflict))
+		deleteAndWait(again)
 		Expect(recordsNamed("orphan")()).To(HaveLen(1))
+	})
+
+	It("publishes a write whose reload failed at the next sync", func() {
+		fake.FailReloads(1)
+		before := fake.Reloads(testZone)
+		obj := newRecord(simplycomv1alpha1.DNSRecordSpec{Name: "reload", Type: "A", Data: "192.0.2.11"})
+		Expect(k8sClient.Create(ctx, obj)).To(Succeed())
+		key := types.NamespacedName{Namespace: obj.Namespace, Name: obj.Name}
+		Eventually(readyCondition(key), timeout, interval).Should(haveReason(metav1.ConditionTrue, simplycomv1alpha1.ReasonSynced))
+		Expect(fake.Reloads(testZone)).To(BeNumerically(">", before))
+		Expect(recordsNamed("reload")()).To(HaveLen(1))
+		deleteAndWait(obj)
+	})
+
+	It("refuses adoption when the account does not allow it", func() {
+		Expect(k8sClient.Create(ctx, &simplycomv1alpha1.ClusterAccount{
+			ObjectMeta: metav1.ObjectMeta{Name: "strict"},
+			Spec: simplycomv1alpha1.ClusterAccountSpec{
+				APIKeySecretRef:   simplycomv1alpha1.ClusterSecretKeySelector{Name: "simply"},
+				AllowedNamespaces: []string{"default"},
+			},
+		})).To(Succeed())
+		id := fake.Seed(testZone, simply.DNSRecord{Name: "handmade", Type: "TXT", Data: "mine", Comment: new("by hand")})
+		obj := newRecord(simplycomv1alpha1.DNSRecordSpec{
+			AccountRef: simplycomv1alpha1.AccountReference{Kind: simplycomv1alpha1.AccountKindCluster, Name: "strict"},
+			Name:       "handmade", Type: "TXT", Data: "mine", Adopt: true,
+		})
+		Expect(k8sClient.Create(ctx, obj)).To(Succeed())
+		key := types.NamespacedName{Namespace: obj.Namespace, Name: obj.Name}
+		Eventually(readyCondition(key), timeout, interval).Should(haveReason(metav1.ConditionFalse, simplycomv1alpha1.ReasonNotPermitted))
+		deleteAndWait(obj)
+		Expect(recordsNamed("handmade")()).To(ConsistOf(HaveField("ID", id)))
+		Expect(*recordsNamed("handmade")()[0].Comment).To(Equal("by hand"))
+	})
+
+	It("keeps a ClusterAccount to its allowed namespaces", func() {
+		Expect(k8sClient.Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "outsider"}})).To(Succeed())
+		obj := newRecord(simplycomv1alpha1.DNSRecordSpec{
+			AccountRef: simplycomv1alpha1.AccountReference{Kind: simplycomv1alpha1.AccountKindCluster, Name: "strict"},
+			Name:       "outsider", Type: "A", Data: "192.0.2.12",
+		})
+		obj.Namespace = "outsider"
+		Expect(k8sClient.Create(ctx, obj)).To(Succeed())
+		key := types.NamespacedName{Namespace: obj.Namespace, Name: obj.Name}
+		Eventually(readyCondition(key), timeout, interval).Should(haveReason(metav1.ConditionFalse, simplycomv1alpha1.ReasonNotPermitted))
+		Expect(recordsNamed("outsider")()).To(BeEmpty())
+		Expect(k8sClient.Get(ctx, key, obj)).To(Succeed())
+		obj.Spec.DeletionPolicy = simplycomv1alpha1.DeletionPolicyOrphan
+		Expect(k8sClient.Update(ctx, obj)).To(Succeed())
+		deleteAndWait(obj)
 	})
 
 	It("finds its record again when the status is lost", func() {
@@ -292,6 +354,8 @@ var _ = Describe("DNSRecord", Ordered, func() {
 
 	It("rejects an invalid spec at admission", func() {
 		obj := newRecord(simplycomv1alpha1.DNSRecordSpec{Name: "mx", Type: "MX", Data: "mail.example.com"})
+		Expect(k8sClient.Create(ctx, obj)).NotTo(Succeed())
+		obj = newRecord(simplycomv1alpha1.DNSRecordSpec{Name: "a", Type: "A", Data: "192.0.2.1", Priority: new(int32(1))})
 		Expect(k8sClient.Create(ctx, obj)).NotTo(Succeed())
 	})
 

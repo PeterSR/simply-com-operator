@@ -98,6 +98,11 @@ func (r *DNSRecordReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			fmt.Sprintf("the account does not allow zone %q", zone), 0)
 	}
 
+	if obj.Spec.Adopt && !acc.allowAdopt {
+		return r.notReady(ctx, &obj, simplycomv1alpha1.ReasonNotPermitted,
+			"spec.adopt is set, but the account does not have allowAdopt", 0)
+	}
+
 	records, cached, err := r.Access.ListZone(ctx, acc, zone)
 	if err != nil {
 		return r.apiError(ctx, &obj, "listing the zone", err)
@@ -119,13 +124,12 @@ func (r *DNSRecordReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return r.notReady(ctx, &obj, simplycomv1alpha1.ReasonConflict, p.conflict, r.RetryInterval)
 	}
 
-	wrote := false
 	// Duplicates go first: an update to a CNAME is refused while another record has its name.
 	for _, id := range p.duplicates {
 		if err := acc.client.DeleteDNSRecord(ctx, zone, id); err != nil && !simply.IsNotFound(err) {
 			return r.apiError(ctx, &obj, "deleting a duplicate record", err)
 		}
-		wrote = true
+		r.Access.Wrote(acc, zone)
 		log.Info("deleted duplicate record", "recordID", id)
 	}
 
@@ -136,7 +140,7 @@ func (r *DNSRecordReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		if err != nil {
 			return r.apiError(ctx, &obj, "creating the record", err)
 		}
-		wrote = true
+		r.Access.Wrote(acc, zone)
 		log.Info("created record", "recordID", recordID, "fqdn", obj.Status.FQDN, "type", want.Type)
 		r.Recorder.Eventf(&obj, nil, corev1.EventTypeNormal, "Created", "Sync", "created %s record %d", want.Type, recordID)
 	case actionUpdate:
@@ -144,7 +148,7 @@ func (r *DNSRecordReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		if err := acc.client.UpdateDNSRecord(ctx, zone, recordID, updatePayload(current, want)); err != nil {
 			return r.apiError(ctx, &obj, "updating the record", err)
 		}
-		wrote = true
+		r.Access.Wrote(acc, zone)
 		verb := "updated"
 		if p.adopting {
 			verb = "adopted"
@@ -153,13 +157,9 @@ func (r *DNSRecordReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		r.Recorder.Eventf(&obj, nil, corev1.EventTypeNormal, "Updated", "Sync", "%s %s record %d", verb, want.Type, recordID)
 	}
 
-	if wrote {
-		r.Access.ForgetZone(acc, zone)
-		if err := acc.client.ReloadDNSZone(ctx, zone); err != nil {
-			// The record is stored; the next sync reloads again. Record what was done meanwhile.
-			obj.Status.RecordID = &recordID
-			return r.apiError(ctx, &obj, "reloading the zone", err)
-		}
+	if err := r.Access.PublishIfNeeded(ctx, acc, zone); err != nil {
+		obj.Status.RecordID = &recordID
+		return r.apiError(ctx, &obj, "reloading the zone", err)
 	}
 
 	now := metav1.Now()
@@ -185,42 +185,52 @@ func (r *DNSRecordReconciler) finalize(ctx context.Context, obj *simplycomv1alph
 	if !controllerutil.ContainsFinalizer(obj, Finalizer) {
 		return ctrl.Result{}, nil
 	}
-	if obj.Spec.DeletionPolicy != simplycomv1alpha1.DeletionPolicyOrphan {
-		acc, err := r.Access.Resolve(ctx, obj.Namespace, obj.Spec.AccountRef)
-		if err != nil {
-			msg := err.Error() + "; the record cannot be removed until the account is back, " +
-				"or set spec.deletionPolicy to Orphan to leave it in the zone"
-			return r.notReady(ctx, obj, reasonFor(err), msg, r.RetryInterval)
-		}
-		zone := obj.Spec.Zone
-		if !acc.allowsZone(zone) {
-			// The account no longer lets the operator touch this zone, so not even to clean up.
-			logf.FromContext(ctx).Info("zone not allowed by the account; leaving any record in place", "zone", zone)
-			controllerutil.RemoveFinalizer(obj, Finalizer)
-			return ctrl.Result{}, r.Update(ctx, obj)
-		}
-		r.Access.ForgetZone(acc, zone)
-		records, _, err := r.Access.ListZone(ctx, acc, zone)
-		if err != nil && !simply.IsNotFound(err) {
-			return r.apiError(ctx, obj, "listing the zone", err)
-		}
-		deleted := 0
-		for _, rec := range records {
-			if o, rf, ok := parseMarker(rec.Comment); ok && o == r.OwnerID && rf == ref {
-				if err := acc.client.DeleteDNSRecord(ctx, zone, rec.ID); err != nil && !simply.IsNotFound(err) {
-					return r.apiError(ctx, obj, "deleting the record", err)
-				}
-				deleted++
-			}
-		}
-		if deleted > 0 {
-			r.Access.ForgetZone(acc, zone)
-			if err := acc.client.ReloadDNSZone(ctx, zone); err != nil {
-				return r.apiError(ctx, obj, "reloading the zone", err)
-			}
-			logf.FromContext(ctx).Info("deleted record", "fqdn", obj.Status.FQDN, "count", deleted)
-		}
+	orphan := obj.Spec.DeletionPolicy == simplycomv1alpha1.DeletionPolicyOrphan
+	acc, err := r.Access.Resolve(ctx, obj.Namespace, obj.Spec.AccountRef)
+	switch {
+	case err != nil && orphan:
+		// The record stays either way; without the account its marker stays too.
+		return r.release(ctx, obj)
+	case err != nil:
+		msg := err.Error() + "; the record cannot be removed until the account is back, " +
+			"or set spec.deletionPolicy to Orphan to leave it in the zone"
+		return r.notReady(ctx, obj, reasonFor(err), msg, r.RetryInterval)
+	case !acc.allowsZone(obj.Spec.Zone):
+		// The account no longer lets the operator touch this zone, not even to clean up.
+		logf.FromContext(ctx).Info("zone not allowed by the account; leaving any record in place", "zone", obj.Spec.Zone)
+		return r.release(ctx, obj)
 	}
+
+	zone := obj.Spec.Zone
+	r.Access.ForgetZone(acc, zone)
+	records, _, err := r.Access.ListZone(ctx, acc, zone)
+	if err != nil && !simply.IsNotFound(err) {
+		return r.apiError(ctx, obj, "listing the zone", err)
+	}
+	for _, rec := range records {
+		if o, rf, ok := parseMarker(rec.Comment); !ok || o != r.OwnerID || rf != ref {
+			continue
+		}
+		if orphan {
+			// Without the marker no later object of the same name takes the record over unasked.
+			rec.Comment = commentWithoutMarker(rec.Comment)
+			err = acc.client.UpdateDNSRecord(ctx, zone, rec.ID, rec)
+		} else {
+			err = acc.client.DeleteDNSRecord(ctx, zone, rec.ID)
+		}
+		if err != nil && !simply.IsNotFound(err) {
+			return r.apiError(ctx, obj, "releasing the record", err)
+		}
+		r.Access.Wrote(acc, zone)
+		logf.FromContext(ctx).Info("released record", "recordID", rec.ID, "fqdn", obj.Status.FQDN, "orphan", orphan)
+	}
+	if err := r.Access.PublishIfNeeded(ctx, acc, zone); err != nil {
+		return r.apiError(ctx, obj, "reloading the zone", err)
+	}
+	return r.release(ctx, obj)
+}
+
+func (r *DNSRecordReconciler) release(ctx context.Context, obj *simplycomv1alpha1.DNSRecord) (ctrl.Result, error) {
 	controllerutil.RemoveFinalizer(obj, Finalizer)
 	return ctrl.Result{}, r.Update(ctx, obj)
 }

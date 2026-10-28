@@ -57,6 +57,18 @@ func commentWithMarker(userComment, ownerID, ref string) string {
 	return userComment + " " + marker(ownerID, ref)
 }
 
+// commentWithoutMarker is comment with the operator's marker taken off, nil when nothing is left.
+func commentWithoutMarker(comment *string) *string {
+	if comment == nil {
+		return nil
+	}
+	rest := strings.TrimSpace(markerPattern.ReplaceAllString(strings.TrimSpace(*comment), ""))
+	if rest == "" {
+		return nil
+	}
+	return &rest
+}
+
 // parseMarker returns the owner id and object reference from a record's comment.
 func parseMarker(comment *string) (ownerID, ref string, ok bool) {
 	if comment == nil {
@@ -232,6 +244,14 @@ func planRecord(zone []simply.DNSRecord, want simply.DNSRecord, ownerID, ref str
 		p := plan{recordID: keep.ID, duplicates: duplicatesOf(owned, keep.ID), action: actionUpdate}
 		if inSync(keep, want) {
 			p.action = actionNone
+			return p
+		}
+		// Changing the record must not turn it into a copy of one the operator does not own.
+		for _, r := range zone {
+			if _, _, ok := parseMarker(r.Comment); !ok && sameRecordData(r, want) {
+				return plan{action: actionConflict, conflict: fmt.Sprintf(
+					"record %d already has this name, type and data and is not managed by the operator", r.ID)}
+			}
 		}
 		return p
 	}

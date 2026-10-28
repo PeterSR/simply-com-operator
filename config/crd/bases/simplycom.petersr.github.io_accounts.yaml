@@ -52,6 +52,12 @@ spec:
           spec:
             description: NamespacedAccountSpec is the desired state of an Account.
             properties:
+              allowAdopt:
+                description: |-
+                  allowAdopt lets objects using this account take over existing records that the operator did
+                  not create (DNSRecord spec.adopt). Off by default, so that whoever may create objects cannot
+                  take over, and later delete, records made by hand.
+                type: boolean
               apiKeySecretRef:
                 description: |-
                   apiKeySecretRef points at the Secret, in the Account's namespace, holding a Simply.com API key.

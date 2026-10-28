@@ -26,14 +26,13 @@ const (
 	ConditionReady = "Ready"
 
 	ReasonSynced          = "Synced"
-	ReasonAccountNotReady = "AccountNotReady"
 	ReasonAccountNotFound = "AccountNotFound"
 	ReasonSecretNotFound  = "SecretNotFound"
 	ReasonInvalidSpec     = "InvalidSpec"
 	ReasonZoneNotAllowed  = "ZoneNotAllowed"
 	ReasonConflict        = "Conflict"
 	ReasonAPIError        = "APIError"
-	ReasonDeleting        = "Deleting"
+	ReasonNotPermitted    = "NotPermitted"
 )
 
 // DefaultAPIKeySecretKey is the Secret key read when a secret reference names none.
@@ -46,6 +45,12 @@ type AccountSpec struct {
 	// +optional
 	// +listType=set
 	Zones []string `json:"zones,omitempty"`
+
+	// allowAdopt lets objects using this account take over existing records that the operator did
+	// not create (DNSRecord spec.adopt). Off by default, so that whoever may create objects cannot
+	// take over, and later delete, records made by hand.
+	// +optional
+	AllowAdopt bool `json:"allowAdopt,omitempty"`
 }
 
 // AccountStatus is the observed state of an Account or ClusterAccount.
