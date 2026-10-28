@@ -76,7 +76,8 @@ kind: DNSRecord
 metadata: {name: bad-address, namespace: default}
 spec:
   deletionPolicy: Orphan
-  accountRef: {name: default}
+  # Validation comes before the account; a missing account lets deletion skip the API too.
+  accountRef: {name: missing}
   zone: example.com
   name: www
   type: A
@@ -127,7 +128,8 @@ YAML
 fi
 echo "ok: MX without priority refused"
 
-# Orphan, or a zone the account does not allow: deleting needs nothing from Simply.com.
+# Orphan without a usable account, or a zone the account does not allow: deleting needs nothing
+# from Simply.com.
 kubectl delete dnsrecord no-account bad-address other-zone --timeout=60s
 kubectl -n outsider delete dnsrecord not-permitted --timeout=60s
 helm uninstall simply-com-operator -n "$ns" --wait
