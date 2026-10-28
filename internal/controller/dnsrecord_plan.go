@@ -246,15 +246,21 @@ func planRecord(zone []simply.DNSRecord, want simply.DNSRecord, ownerID, ref str
 
 	if len(owned) > 0 {
 		keep := pickOwned(owned, want, preferID)
-		if preferID == nil && !adopt && (!strings.EqualFold(keep.Name, want.Name) || keep.Type != want.Type) {
-			// A marker this object never wrote: left behind when an earlier object of the same name
-			// was let go without reaching Simply.com. Rewriting that record into something else is
-			// not what anyone asked for.
-			return plan{action: actionConflict, adoptable: true, conflict: fmt.Sprintf(
-				"record %d (%s %s) carries this object's marker from an earlier object of the same name; "+
-					"set spec.adopt to take it over", keep.ID, keep.Type, keep.Name)}
+		leftover := false
+		for _, r := range owned {
+			if preferID == nil && (!strings.EqualFold(r.Name, want.Name) || r.Type != want.Type) {
+				leftover = true
+				if !adopt {
+					// A marker this object never wrote: left behind when an earlier object of the
+					// same name was let go without reaching Simply.com. Rewriting or deleting that
+					// record is not what anyone asked for.
+					return plan{action: actionConflict, adoptable: true, conflict: fmt.Sprintf(
+						"record %d (%s %s) carries this object's marker from an earlier object of the same name; "+
+							"set spec.adopt to take it over", r.ID, r.Type, r.Name)}
+				}
+			}
 		}
-		p := plan{recordID: keep.ID, duplicates: duplicatesOf(owned, keep.ID), action: actionUpdate}
+		p := plan{recordID: keep.ID, duplicates: duplicatesOf(owned, keep.ID), action: actionUpdate, adopting: leftover}
 		if inSync(keep, want) {
 			p.action = actionNone
 			return p

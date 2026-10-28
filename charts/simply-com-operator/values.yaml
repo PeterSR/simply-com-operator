@@ -22,7 +22,7 @@ crds:
 # Required. Identifies this installation in the ownership marker the operator writes into the
 # comment of every record it manages. Every installation that may share a Simply.com zone, including
 # a cluster restored from another's backup, must have its own, such as the cluster's name. Records
-# keep the id they were created with, so choose it once.
+# keep the id they were created with, so choose it once. Quote it if it looks like a number.
 ownerID: ""
 
 # Simply.com API settings.

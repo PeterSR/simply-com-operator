@@ -141,6 +141,8 @@ func TestPlanRecord(t *testing.T) {
 			[]simply.DNSRecord{ours(1, "192.0.2.9"), foreign(5, "A", "192.0.2.1", marker("me", "ns/other"))}, false, actionConflict, 0, 0},
 		{"marker left by an earlier object on another type conflicts on first sync",
 			[]simply.DNSRecord{{ID: 1, Name: "www", Type: "TXT", Data: "x", Comment: new(marker("me", "ns/www"))}}, false, actionConflict, 0, 0},
+		{"a second leftover of another type is not deleted as a duplicate",
+			[]simply.DNSRecord{ours(1, "192.0.2.1"), {ID: 2, Name: "www", Type: "TXT", Data: "x", Comment: new(marker("me", "ns/www"))}}, false, actionConflict, 0, 0},
 		{"marker left by an earlier object is taken with adopt",
 			[]simply.DNSRecord{{ID: 1, Name: "www", Type: "TXT", Data: "x", Comment: new(marker("me", "ns/www"))}}, true, actionUpdate, 1, 0},
 		{"unmanaged CNAME conflicts", []simply.DNSRecord{foreign(5, "CNAME", "x.example.net", "")}, true, actionConflict, 0, 0},

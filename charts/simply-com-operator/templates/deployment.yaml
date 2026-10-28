@@ -44,7 +44,10 @@ spec:
             - --metrics-bind-address=:{{ .Values.metrics.port }}
             - --metrics-secure=false
             {{- end }}
-            {{- $ownerID := required "ownerID is required: a name for this installation, such as the cluster's" .Values.ownerID | toString }}
+            {{- $ownerID := required "ownerID is required: a name for this installation, such as the cluster's" .Values.ownerID }}
+            {{- if not (kindIs "string" $ownerID) }}
+            {{- fail "ownerID must be a string: quote it in YAML so it is not read as a number" }}
+            {{- end }}
             {{- if not (regexMatch "^[A-Za-z0-9][A-Za-z0-9._-]{0,62}$" $ownerID) }}
             {{- fail "ownerID must be 1 to 63 letters, digits, '.', '_' or '-', starting with a letter or digit" }}
             {{- end }}
