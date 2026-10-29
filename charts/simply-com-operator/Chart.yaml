@@ -1,10 +1,10 @@
 apiVersion: v2
 name: simply-com-operator
-description: A Kubernetes operator that manages Simply.com resources, such as DNS records, declaratively as custom resources
+description: Manage Simply.com DNS records as Kubernetes resources
 type: application
 # The release workflow sets version and appVersion from the tag.
-version: 0.2.0
-appVersion: "0.2.0"
+version: 0.2.1
+appVersion: "0.2.1"
 kubeVersion: ">=1.29.0-0"
 home: https://github.com/PeterSR/simply-com-operator
 sources:
@@ -20,7 +20,15 @@ keywords:
 annotations:
   artifacthub.io/license: Apache-2.0
   artifacthub.io/category: networking
-  artifacthub.io/prerelease: "true"
+  artifacthub.io/prerelease: "false"
+  artifacthub.io/images: |
+    - name: simply-com-operator
+      image: ghcr.io/petersr/simply-com-operator:v0.2.1
+  artifacthub.io/links: |
+    - name: source
+      url: https://github.com/PeterSR/simply-com-operator
+    - name: changelog
+      url: https://github.com/PeterSR/simply-com-operator/blob/main/CHANGELOG.md
   artifacthub.io/operator: "true"
   artifacthub.io/crds: |
     - kind: DNSRecord

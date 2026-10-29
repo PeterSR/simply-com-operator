@@ -5,7 +5,6 @@
 *.so
 *.dylib
 bin/*
-Dockerfile.cross
 
 # Test binary, built with `go test -c`
 *.test
@@ -29,6 +28,5 @@ go.work
 # Kubeconfig might contain secrets
 *.kubeconfig
 
-# Local notes and build output
-.agent-workspace/
+# Build output
 dist/

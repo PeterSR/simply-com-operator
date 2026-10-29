@@ -2,7 +2,7 @@
 
 image:
   repository: ghcr.io/petersr/simply-com-operator
-  # Defaults to the chart's appVersion.
+  # Defaults to v<appVersion>.
   tag: ""
   pullPolicy: IfNotPresent
 

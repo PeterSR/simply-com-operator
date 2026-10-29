@@ -24,8 +24,8 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          # Matches the toolchain line in go.mod and GO_VERSION in the Dockerfile.
-          go-version: "1.26.10"
+          # The toolchain line; the Dockerfile's golang tag must match it.
+          go-version-file: go.mod
       - name: generated files are up to date
         run: make verify-generated
       - name: go mod tidy
