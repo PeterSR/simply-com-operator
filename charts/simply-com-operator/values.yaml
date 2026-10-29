@@ -42,7 +42,7 @@ accountCheckInterval: 1h
 rbac:
   # Add DNSRecord and Account permissions to the built-in admin, edit and view ClusterRoles. Anyone
   # who can then create a DNSRecord can change the zones of every account their namespace may use,
-  # so restrict ClusterAccounts with allowedNamespaces before turning this on.
+  # so restrict ClusterAccounts with allowedNamespaces or namespaceSelector before turning this on.
   aggregateToDefaultRoles: false
 
 logLevel: info

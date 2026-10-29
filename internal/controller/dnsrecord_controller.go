@@ -64,6 +64,7 @@ type DNSRecordReconciler struct {
 // +kubebuilder:rbac:groups=simplycom.petersr.github.io,resources=dnsrecords/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=simplycom.petersr.github.io,resources=dnsrecords/finalizers,verbs=update
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get
+// +kubebuilder:rbac:groups="",resources=namespaces,verbs=get;list;watch
 // +kubebuilder:rbac:groups=events.k8s.io,resources=events,verbs=create;patch
 
 func (r *DNSRecordReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -198,7 +199,7 @@ func (r *DNSRecordReconciler) finalize(ctx context.Context, obj *simplycomv1alph
 				"%s; any record is left in the zone as it is, with the ownership marker", err)
 			return r.release(ctx, obj)
 		}
-		msg := err.Error() + "; the record cannot be removed until the account is back, " +
+		msg := err.Error() + "; the record cannot be removed until the account is usable again, " +
 			"or set spec.deletionPolicy to Orphan to leave it in the zone"
 		return r.notReady(ctx, obj, reasonFor(err), msg, r.RetryInterval)
 	}
@@ -308,10 +309,10 @@ func (r *DNSRecordReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		}); err != nil {
 		return err
 	}
-	recordsUsing := func(key func(o client.Object) string) handler.EventHandler {
+	records := func(listOpt func(o client.Object) client.ListOption) handler.EventHandler {
 		return handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, o client.Object) []reconcile.Request {
 			var list simplycomv1alpha1.DNSRecordList
-			if err := r.List(ctx, &list, client.MatchingFields{accountRefIndex: key(o)}); err != nil {
+			if err := r.List(ctx, &list, listOpt(o)); err != nil {
 				return nil
 			}
 			reqs := make([]reconcile.Request, 0, len(list.Items))
@@ -321,6 +322,9 @@ func (r *DNSRecordReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			return reqs
 		})
 	}
+	recordsUsing := func(key func(o client.Object) string) handler.EventHandler {
+		return records(func(o client.Object) client.ListOption { return client.MatchingFields{accountRefIndex: key(o)} })
+	}
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&simplycomv1alpha1.DNSRecord{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
 		Watches(&simplycomv1alpha1.Account{}, recordsUsing(func(o client.Object) string {
@@ -329,6 +333,9 @@ func (r *DNSRecordReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Watches(&simplycomv1alpha1.ClusterAccount{}, recordsUsing(func(o client.Object) string {
 			return accountRefKey(simplycomv1alpha1.AccountKindCluster, "", o.GetName())
 		}), builder.WithPredicates(readyChanged{})).
+		// A ClusterAccount's namespaceSelector can start or stop matching when a namespace's labels change.
+		Watches(&corev1.Namespace{}, records(func(o client.Object) client.ListOption { return client.InNamespace(o.GetName()) }),
+			builder.WithPredicates(predicate.LabelChangedPredicate{})).
 		Named("dnsrecord").
 		Complete(r)
 }

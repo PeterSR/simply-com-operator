@@ -11,8 +11,12 @@ spec:
   # Optional: the only zones records using this account may change.
   zones:
     - example.com
-  # Optional: the only namespaces whose DNSRecords may use this account.
+  # Optional: namespaces whose DNSRecords may use this account, by name and by label. A namespace
+  # may when either lets it in; with neither set, every namespace may.
   allowedNamespaces:
     - shop
+  namespaceSelector:
+    matchLabels:
+      simply-dns: allowed
   # Optional: let DNSRecords take over records made by hand (spec.adopt).
   allowAdopt: false

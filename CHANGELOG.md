@@ -6,6 +6,23 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-29
+
+### Added
+
+- `ClusterAccount.spec.namespaceSelector`: let namespaces use the account by their labels, besides
+  those named in `allowedNamespaces`. Records notice a namespace's labels changing at once. The
+  operator now reads and watches Namespaces, for which the chart's ClusterRole grants
+  `get`, `list` and `watch`. A ClusterAccount whose selector is invalid reports `InvalidSpec`, and
+  until it is fixed its records with `deletionPolicy: Delete` cannot be deleted.
+
+### Upgrade notes
+
+- Apply the 0.2.0 CRDs before using `namespaceSelector`. An older CRD or operator does not know the
+  field and reads an account restricted by the selector alone as open to every namespace, so do
+  not roll back below 0.2.0 while one exists. Listing at least one namespace in
+  `allowedNamespaces` as well makes older versions fail closed.
+
 ## [0.1.0] - 2026-10-28
 
 The first release.
@@ -23,5 +40,6 @@ The first release.
 - Helm chart at `oci://ghcr.io/petersr/charts/simply-com-operator` and image at
   `ghcr.io/petersr/simply-com-operator`, for linux/amd64 and linux/arm64.
 
-[Unreleased]: https://github.com/PeterSR/simply-com-operator/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/PeterSR/simply-com-operator/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/PeterSR/simply-com-operator/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/PeterSR/simply-com-operator/releases/tag/v0.1.0

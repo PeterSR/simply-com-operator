@@ -34,7 +34,7 @@ kubectl -n "$ns" create secret generic simply-com-api-key --from-literal=apiKey=
 helm upgrade --install simply-com-operator "$root/charts/simply-com-operator" -n "$ns" \
   --set image.repository=simply-com-operator --set image.tag=e2e --set image.pullPolicy=Never \
   --set ownerID=e2e --set simplyAPI.url=http://127.0.0.1:9 \
-  --set retryInterval=5s --wait --timeout 3m
+  --set retryInterval=10m --wait --timeout 3m
 kubectl apply -f - <<YAML
 apiVersion: simplycom.petersr.github.io/v1alpha1
 kind: ClusterAccount
@@ -112,6 +112,36 @@ spec:
 YAML
 wait_reason dnsrecord/not-permitted NotPermitted -n outsider
 
+# A namespace let in by its label. The retry interval is 10m, so seeing the record move on right
+# after the label is added shows the operator watches namespace labels. With the label it gets as
+# far as the closed API port.
+kubectl create namespace labelled-later --dry-run=client -o yaml | kubectl apply -f -
+kubectl apply -f - <<YAML
+apiVersion: simplycom.petersr.github.io/v1alpha1
+kind: ClusterAccount
+metadata: {name: by-label}
+spec:
+  apiKeySecretRef: {name: simply-com-api-key, namespace: $ns}
+  namespaceSelector:
+    matchLabels: {simply-dns: allowed}
+---
+apiVersion: simplycom.petersr.github.io/v1alpha1
+kind: DNSRecord
+metadata: {name: by-label, namespace: labelled-later}
+spec:
+  accountRef: {name: by-label}
+  zone: example.com
+  name: www
+  type: A
+  data: 192.0.2.1
+  deletionPolicy: Orphan
+YAML
+wait_reason dnsrecord/by-label NotPermitted -n labelled-later
+# The account's first status change also requeues its records; let it pass before labelling.
+wait_reason clusteraccount/by-label APIError
+kubectl label namespace labelled-later simply-dns=allowed
+wait_reason dnsrecord/by-label APIError -n labelled-later
+
 if kubectl apply -f - <<'YAML' 2>/dev/null; then
 apiVersion: simplycom.petersr.github.io/v1alpha1
 kind: DNSRecord
@@ -132,6 +162,7 @@ echo "ok: MX without priority refused"
 # from Simply.com.
 kubectl delete dnsrecord no-account bad-address other-zone --timeout=60s
 kubectl -n outsider delete dnsrecord not-permitted --timeout=60s
+kubectl -n labelled-later delete dnsrecord by-label --timeout=60s
 helm uninstall simply-com-operator -n "$ns" --wait
 kubectl get crd dnsrecords.simplycom.petersr.github.io >/dev/null
 echo "ok: CRDs kept after uninstall"

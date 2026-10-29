@@ -27,6 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	simplycomv1alpha1 "github.com/PeterSR/simply-com-operator/api/v1alpha1"
 	"github.com/PeterSR/simply-com-operator/internal/simply"
@@ -298,6 +299,114 @@ var _ = Describe("DNSRecord", Ordered, func() {
 		Expect(recordsNamed("outsider")()).To(BeEmpty())
 		// Delete policy: a namespace the account does not allow is let go without touching the zone.
 		deleteAndWait(obj)
+	})
+
+	It("lets a ClusterAccount allow namespaces by label", func() {
+		Expect(k8sClient.Create(ctx, &simplycomv1alpha1.ClusterAccount{
+			ObjectMeta: metav1.ObjectMeta{Name: "by-label"},
+			Spec: simplycomv1alpha1.ClusterAccountSpec{
+				APIKeySecretRef:   simplycomv1alpha1.ClusterSecretKeySelector{Name: "simply"},
+				NamespaceSelector: &metav1.LabelSelector{MatchLabels: map[string]string{"dns": "allowed"}},
+			},
+		})).To(Succeed())
+		ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "labelled", Labels: map[string]string{"dns": "allowed"}}}
+		Expect(k8sClient.Create(ctx, ns)).To(Succeed())
+		obj := newRecord(simplycomv1alpha1.DNSRecordSpec{
+			AccountRef: simplycomv1alpha1.AccountReference{Kind: simplycomv1alpha1.AccountKindCluster, Name: "by-label"},
+			Name:       "labelled", Type: "A", Data: "192.0.2.14",
+		})
+		obj.Namespace = ns.Name
+		Expect(k8sClient.Create(ctx, obj)).To(Succeed())
+		key := types.NamespacedName{Namespace: obj.Namespace, Name: obj.Name}
+		Eventually(readyCondition(key), timeout, interval).Should(haveReason(metav1.ConditionTrue, simplycomv1alpha1.ReasonSynced))
+
+		// The suite resyncs every few seconds, so this does not prove the Namespace watch; the kind e2e does.
+		setLabel := func(value string) {
+			var current corev1.Namespace
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: ns.Name}, &current)).To(Succeed())
+			current.Labels["dns"] = value
+			Expect(k8sClient.Update(ctx, &current)).To(Succeed())
+		}
+		setLabel("no")
+		Eventually(readyCondition(key), timeout, interval).Should(haveReason(metav1.ConditionFalse, simplycomv1alpha1.ReasonNotPermitted))
+		Expect(recordsNamed("labelled")()).To(HaveLen(1))
+
+		setLabel("allowed")
+		Eventually(readyCondition(key), timeout, interval).Should(haveReason(metav1.ConditionTrue, simplycomv1alpha1.ReasonSynced))
+		deleteAndWait(obj)
+		Expect(recordsNamed("labelled")()).To(BeEmpty())
+	})
+
+	It("keeps allowing the listed namespaces next to a selector", func() {
+		Expect(k8sClient.Create(ctx, &simplycomv1alpha1.ClusterAccount{
+			ObjectMeta: metav1.ObjectMeta{Name: "list-and-label"},
+			Spec: simplycomv1alpha1.ClusterAccountSpec{
+				APIKeySecretRef:   simplycomv1alpha1.ClusterSecretKeySelector{Name: "simply"},
+				AllowedNamespaces: []string{"default"},
+				NamespaceSelector: &metav1.LabelSelector{MatchLabels: map[string]string{"dns": "nowhere"}},
+			},
+		})).To(Succeed())
+		listed := newRecord(simplycomv1alpha1.DNSRecordSpec{
+			AccountRef: simplycomv1alpha1.AccountReference{Kind: simplycomv1alpha1.AccountKindCluster, Name: "list-and-label"},
+			Name:       "listed", Type: "A", Data: "192.0.2.15",
+		})
+		Expect(k8sClient.Create(ctx, listed)).To(Succeed())
+		Eventually(readyCondition(client.ObjectKeyFromObject(listed)), timeout, interval).
+			Should(haveReason(metav1.ConditionTrue, simplycomv1alpha1.ReasonSynced))
+
+		Expect(k8sClient.Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "unlabelled"}})).To(Succeed())
+		other := newRecord(simplycomv1alpha1.DNSRecordSpec{
+			AccountRef: simplycomv1alpha1.AccountReference{Kind: simplycomv1alpha1.AccountKindCluster, Name: "list-and-label"},
+			Name:       "unlabelled", Type: "A", Data: "192.0.2.16",
+		})
+		other.Namespace = "unlabelled"
+		Expect(k8sClient.Create(ctx, other)).To(Succeed())
+		Eventually(readyCondition(client.ObjectKeyFromObject(other)), timeout, interval).
+			Should(haveReason(metav1.ConditionFalse, simplycomv1alpha1.ReasonNotPermitted))
+		Expect(recordsNamed("unlabelled")()).To(BeEmpty())
+		deleteAndWait(other)
+		deleteAndWait(listed)
+	})
+
+	It("reports an invalid namespaceSelector on the account and the record", func() {
+		Expect(k8sClient.Create(ctx, &simplycomv1alpha1.ClusterAccount{
+			ObjectMeta: metav1.ObjectMeta{Name: "bad-selector"},
+			Spec: simplycomv1alpha1.ClusterAccountSpec{
+				APIKeySecretRef: simplycomv1alpha1.ClusterSecretKeySelector{Name: "simply"},
+				NamespaceSelector: &metav1.LabelSelector{MatchExpressions: []metav1.LabelSelectorRequirement{
+					{Key: "dns", Operator: "Sometimes"},
+				}},
+			},
+		})).To(Succeed())
+		Eventually(func() *metav1.Condition {
+			var acc simplycomv1alpha1.ClusterAccount
+			if err := k8sClient.Get(ctx, types.NamespacedName{Name: "bad-selector"}, &acc); err != nil {
+				return nil
+			}
+			return meta.FindStatusCondition(acc.Status.Conditions, simplycomv1alpha1.ConditionReady)
+		}, timeout, interval).Should(haveReason(metav1.ConditionFalse, simplycomv1alpha1.ReasonInvalidSpec))
+
+		obj := newRecord(simplycomv1alpha1.DNSRecordSpec{
+			AccountRef: simplycomv1alpha1.AccountReference{Kind: simplycomv1alpha1.AccountKindCluster, Name: "bad-selector"},
+			Name:       "bad-selector", Type: "A", Data: "192.0.2.17",
+		})
+		Expect(k8sClient.Create(ctx, obj)).To(Succeed())
+		Eventually(readyCondition(client.ObjectKeyFromObject(obj)), timeout, interval).
+			Should(haveReason(metav1.ConditionFalse, simplycomv1alpha1.ReasonInvalidSpec))
+		Expect(recordsNamed("bad-selector")()).To(BeEmpty())
+
+		// Deletion waits for the account to be fixed rather than guessing whether the namespace may.
+		Expect(k8sClient.Delete(ctx, obj)).To(Succeed())
+		Consistently(func() error {
+			return k8sClient.Get(ctx, client.ObjectKeyFromObject(obj), &simplycomv1alpha1.DNSRecord{})
+		}, 2*time.Second, interval).Should(Succeed())
+		var acc simplycomv1alpha1.ClusterAccount
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: "bad-selector"}, &acc)).To(Succeed())
+		acc.Spec.NamespaceSelector = &metav1.LabelSelector{}
+		Expect(k8sClient.Update(ctx, &acc)).To(Succeed())
+		Eventually(func() bool {
+			return apierrors.IsNotFound(k8sClient.Get(ctx, client.ObjectKeyFromObject(obj), &simplycomv1alpha1.DNSRecord{}))
+		}, timeout, interval).Should(BeTrue())
 	})
 
 	It("finds its record again when the status is lost", func() {
