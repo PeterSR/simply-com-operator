@@ -1,5 +1,5 @@
 # One DNSRecord per record, in the namespace shop. All use the ClusterAccount "default" from
-# examples/clusteraccount.yaml, whose allowedNamespaces includes shop. The last one also needs the
+# examples/clusteraccount.yaml, which lets in the namespace shop. The last one also needs the
 # account's allowAdopt.
 apiVersion: simplycom.petersr.github.io/v1alpha1
 kind: DNSRecord

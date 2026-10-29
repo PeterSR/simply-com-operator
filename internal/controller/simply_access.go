@@ -29,6 +29,8 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -134,7 +136,11 @@ func (s *SimplyAccess) Resolve(ctx context.Context, namespace string, ref simply
 			}
 			return nil, err
 		}
-		if namespace != "" && len(acc.Spec.AllowedNamespaces) > 0 && !slices.Contains(acc.Spec.AllowedNamespaces, namespace) {
+		allowed, err := s.namespaceAllowed(ctx, &acc, namespace)
+		if err != nil {
+			return nil, err
+		}
+		if !allowed {
 			return nil, accountError(simplycomv1alpha1.ReasonNotPermitted,
 				"ClusterAccount %s does not allow namespace %s", ref.Name, namespace)
 		}
@@ -159,6 +165,36 @@ func (s *SimplyAccess) Resolve(ctx context.Context, namespace string, ref simply
 		allowAdopt: spec.AllowAdopt,
 		cacheKey:   hex.EncodeToString(sum[:8]),
 	}, nil
+}
+
+// namespaceAllowed says whether objects in namespace may use acc. An empty namespace only has the
+// selector checked, so the account's own controller reports a broken one.
+func (s *SimplyAccess) namespaceAllowed(ctx context.Context, acc *simplycomv1alpha1.ClusterAccount, namespace string) (bool, error) {
+	var selector labels.Selector
+	if acc.Spec.NamespaceSelector != nil {
+		var err error
+		if selector, err = metav1.LabelSelectorAsSelector(acc.Spec.NamespaceSelector); err != nil {
+			return false, accountError(simplycomv1alpha1.ReasonInvalidSpec,
+				"ClusterAccount %s has an invalid namespaceSelector: %v", acc.Name, err)
+		}
+	}
+	if namespace == "" || (selector == nil && len(acc.Spec.AllowedNamespaces) == 0) {
+		return true, nil
+	}
+	if slices.Contains(acc.Spec.AllowedNamespaces, namespace) {
+		return true, nil
+	}
+	if selector == nil {
+		return false, nil
+	}
+	var ns corev1.Namespace
+	if err := s.Reader.Get(ctx, types.NamespacedName{Name: namespace}, &ns); err != nil {
+		if apierrors.IsNotFound(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	return selector.Matches(labels.Set(ns.Labels)), nil
 }
 
 func (s *SimplyAccess) readSecret(ctx context.Context, name types.NamespacedName, key string) (string, error) {

@@ -89,8 +89,11 @@ spec:
     namespace: simply-com-operator
   zones:              # optional: the only zones this account may change
     - example.com
-  allowedNamespaces:  # optional: the only namespaces whose records may use it
+  allowedNamespaces:  # optional: namespaces whose records may use it
     - shop
+  namespaceSelector:  # optional: and namespaces with these labels
+    matchLabels:
+      simply-dns: allowed
 ```
 
 ```console
@@ -115,7 +118,14 @@ Both have:
 | `spec.apiKeySecretRef.namespace` | `ClusterAccount` only; default the operator's namespace |
 | `spec.zones` | if set, the only zones (Simply.com products) records using this account may change |
 | `spec.allowAdopt` | let records using this account take over records made by hand (`adopt`); default off |
-| `spec.allowedNamespaces` | `ClusterAccount` only: if set, the only namespaces whose records may use it |
+| `spec.allowedNamespaces` | `ClusterAccount` only: namespaces whose records may use it |
+| `spec.namespaceSelector` | `ClusterAccount` only: a label selector for more namespaces whose records may use it |
+
+A ClusterAccount with neither `allowedNamespaces` nor `namespaceSelector` may be used from every
+namespace. With either, a namespace may use it when the list names it or the selector matches its
+labels. An empty selector (`{}`) matches every namespace. Labelling a namespace takes rights over
+Namespace objects, which namespace admins normally lack, so a namespace's own users cannot let
+themselves in; whoever may create namespaces can, by labelling them. Records notice a label change at once.
 
 The status reports whether Simply.com accepted the key (`Ready`) and which products it can reach
 (`status.products`). The key is read when it is used, so a rotated Secret takes effect at once.
@@ -148,8 +158,8 @@ shop        shop   shop.example.com   CNAME   True    Synced   1m
 |---|---|
 | `AccountNotFound`, `SecretNotFound` | the account or its Secret is missing; retried, and picked up when it appears |
 | `ZoneNotAllowed` | the account's `zones` does not include the zone |
-| `NotPermitted` | the ClusterAccount's `allowedNamespaces` leaves out this namespace |
-| `InvalidSpec` | for example an `A` record whose data is not an IPv4 address, or a CNAME at the apex |
+| `NotPermitted` | neither the ClusterAccount's `allowedNamespaces` nor its `namespaceSelector` lets this namespace in |
+| `InvalidSpec` | for example an `A` record whose data is not an IPv4 address, a CNAME at the apex, or a ClusterAccount whose `namespaceSelector` is not a valid selector |
 | `Conflict` | another record stands in the way; the message says which (see below) |
 | `APIError` | Simply.com refused or failed the request; the message has its answer |
 
@@ -177,7 +187,7 @@ The operator was written to run against zones that also hold records made by han
 - `deletionPolicy: Orphan` removes the marker as it lets go, so a later object with the same name
   does not quietly take the record over. If the account is gone or Simply.com cannot be reached,
   the object is let go anyway and the marker stays (a warning event says so).
-- A ClusterAccount whose `allowedNamespaces` no longer includes a namespace lets that namespace's
+- A ClusterAccount that no longer lets a namespace in (by `allowedNamespaces` or `namespaceSelector`) lets that namespace's
   `DNSRecord`s be deleted without touching their records, as does an account whose `zones` no
   longer includes the zone. A warning event says so.
 - A record whose marker was left behind that way is not taken over by a later object of the same
@@ -187,7 +197,7 @@ The operator was written to run against zones that also hold records made by han
 `allowAdopt` take over, every zone of every account their namespace may use. Extra records at an
 existing name are allowed by design (several `A` or `TXT` values), so this includes, say, a second
 `A` record for the apex or an `_acme-challenge` TXT. Grant `DNSRecord` creation like you would grant
-access to the DNS itself: give ClusterAccounts `allowedNamespaces` and `zones`, and leave the chart's
+access to the DNS itself: give ClusterAccounts `allowedNamespaces` or `namespaceSelector`, and `zones`, and leave the chart's
 `rbac.aggregateToDefaultRoles` off unless every namespace editor should have that power. The
 `zones` and `allowAdopt` of a namespaced `Account` are guard rails for its own namespace, not a
 boundary: whoever may edit the Account, or read its Secret, can change them or use the key directly.
