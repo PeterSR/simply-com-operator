@@ -16,7 +16,8 @@ replicaCount: 1
 crds:
   # Install the CustomResourceDefinitions with the chart.
   install: true
-  # Keep the CustomResourceDefinitions, and with them every DNSRecord, when the chart is uninstalled.
+  # Keep the CustomResourceDefinitions, and with them every DNSRecord, when the chart is uninstalled
+  # or its Argo CD Application deleted (helm.sh/resource-policy: keep and Argo CD's Delete=false).
   keep: true
 
 # Required. Identifies this installation in the ownership marker the operator writes into the

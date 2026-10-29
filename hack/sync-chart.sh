@@ -12,7 +12,7 @@ for crd in "$root"/config/crd/bases/*.yaml; do
   {
     echo '{{- if .Values.crds.install }}'
     sed -e '/^---$/d' \
-        -e 's/^  annotations:$/  annotations:\n    {{- if .Values.crds.keep }}\n    helm.sh\/resource-policy: keep\n    {{- end }}/' \
+        -e 's/^  annotations:$/  annotations:\n    {{- if .Values.crds.keep }}\n    helm.sh\/resource-policy: keep\n    argocd.argoproj.io\/sync-options: Delete=false\n    {{- end }}/' \
         "$crd"
     echo '{{- end }}'
   } > "$out"

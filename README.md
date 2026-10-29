@@ -276,7 +276,7 @@ namespaced `Account`s.
   and TLSA/SSHFP hex case. For other types (HTTPS, LOC, ...) write the data the way Simply.com
   returns it: otherwise each resync rewrites the record, and a hand-made record with the same value
   is not recognised as one, so the operator adds a second record instead of reporting a conflict.
-- Uninstalling the chart keeps the CRDs and every `DNSRecord`, but nothing then removes their
+- Uninstalling the chart (or deleting its Argo CD Application) keeps the CRDs and every `DNSRecord`, but nothing then removes their
   finalizers. Delete the `DNSRecord`s (or set them to `Orphan`) before uninstalling.
 - If the account or its Secret is gone when a `DNSRecord` with `deletionPolicy: Delete` is deleted,
   deletion waits until it is back. Set `deletionPolicy: Orphan` on the object to let it go. Keep
