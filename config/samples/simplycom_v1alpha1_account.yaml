@@ -1,9 +1,0 @@
-apiVersion: simplycom.petersr.github.io/v1alpha1
-kind: Account
-metadata:
-  name: simply-com
-spec:
-  apiKeySecretRef:
-    name: simply-com
-  zones:
-    - example.com

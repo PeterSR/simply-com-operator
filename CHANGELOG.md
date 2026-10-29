@@ -6,6 +6,20 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-10-29
+
+### Changed
+
+- The image and the chart are signed with cosign, and the image has a build provenance
+  attestation. Earlier releases are unsigned.
+- Updated Kubernetes libraries (0.37.1) and controller-runtime (0.25.2). The distroless base image
+  is pinned by digest.
+
+### Removed
+
+- The kustomize install manifests under `config/`. The Helm chart is the way to install; the CRDs
+  are also attached to each GitHub release.
+
 ## [0.2.0] - 2026-10-29
 
 ### Added
@@ -40,6 +54,7 @@ The first release.
 - Helm chart at `oci://ghcr.io/petersr/charts/simply-com-operator` and image at
   `ghcr.io/petersr/simply-com-operator`, for linux/amd64 and linux/arm64.
 
-[Unreleased]: https://github.com/PeterSR/simply-com-operator/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/PeterSR/simply-com-operator/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/PeterSR/simply-com-operator/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/PeterSR/simply-com-operator/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/PeterSR/simply-com-operator/releases/tag/v0.1.0

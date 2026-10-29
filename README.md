@@ -1,5 +1,9 @@
 # simply-com-operator
 
+[![test](https://github.com/PeterSR/simply-com-operator/actions/workflows/test.yml/badge.svg)](https://github.com/PeterSR/simply-com-operator/actions/workflows/test.yml)
+[![release](https://img.shields.io/github/v/release/PeterSR/simply-com-operator)](https://github.com/PeterSR/simply-com-operator/releases)
+[![license](https://img.shields.io/github/license/PeterSR/simply-com-operator)](LICENSE)
+
 A Kubernetes operator for [Simply.com](https://www.simply.com). Declare DNS records as Kubernetes
 objects, next to the workloads that need them, and the operator keeps the zone at Simply.com in line.
 
@@ -19,24 +23,9 @@ spec:
   ttl: 600
 ```
 
-The operator is built to cover more of the Simply.com API over time (mail forwards, DNS forwards and
-so on, each as its own kind sharing the same accounts). Today it manages **DNS records**.
-
 > Status: alpha. The API is `v1alpha1` and may change before 1.0.
 >
 > This project is not affiliated with or endorsed by Simply.com.
-
-## Contents
-
-- [How it works](#how-it-works)
-- [Install](#install)
-- [Accounts](#accounts)
-- [DNS records](#dns-records)
-- [Safety: what the operator will and will not touch](#safety-what-the-operator-will-and-will-not-touch)
-- [Declaring records from your own Helm charts](#declaring-records-from-your-own-helm-charts)
-- [Configuration](#configuration)
-- [Limitations](#limitations)
-- [Development](#development)
 
 ## How it works
 
@@ -123,21 +112,15 @@ Both have:
 
 A ClusterAccount with neither `allowedNamespaces` nor `namespaceSelector` may be used from every
 namespace. With either, a namespace may use it when the list names it or the selector matches its
-labels. An empty selector (`{}`) matches every namespace. Labelling a namespace takes `update` or
-`patch` on that Namespace object, which the built-in `admin` and `edit` roles do not grant, so with
-those a namespace's own users cannot let themselves in. Whoever may create namespaces can, and so
-can anyone bound inside the namespace by a RoleBinding to a role that may update or patch
-namespaces (such as `cluster-admin`). Protect the label with an admission policy if that matters
-to you.
+labels. An empty selector (`{}`) matches every namespace. Records notice a label change at once.
+Labelling a namespace needs `update` or `patch` on the Namespace, which the built-in `admin` and
+`edit` roles do not grant; if others can label namespaces, protect the label with an admission
+policy.
 
 A ClusterAccount whose `namespaceSelector` is not a valid selector is `InvalidSpec`; until it is
 fixed, its records report `InvalidSpec` and those with `deletionPolicy: Delete` cannot be deleted.
 
-**Upgrading to 0.2.0 and rolling back.** Apply the 0.2.0 CRDs before using `namespaceSelector`
-(the chart does this unless `crds.install` is off). An older CRD or operator does not know the
-field and reads such an account as allowing every namespace, so do not roll back below 0.2.0 while
-an account relies on the selector alone. Listing at least one namespace in `allowedNamespaces` too
-makes an older version fail closed. Records notice a label change at once.
+Upgrading from 0.1.x or rolling back to it: see the [changelog](CHANGELOG.md#020---2026-10-29).
 
 The status reports whether Simply.com accepted the key (`Ready`) and which products it can reach
 (`status.products`). The key is read when it is used, so a rotated Secret takes effect at once.
@@ -190,8 +173,8 @@ The operator was written to run against zones that also hold records made by han
   rewrites its comment to the spec's comment plus the marker, and from then on manages (and on
   deletion removes) it. A managed record is never changed into a copy of a record it does not manage.
 - A record marked by another installation or another object is always a `Conflict`, also with `adopt`.
-- A `CNAME` cannot share its name with another record. Wanting a CNAME where an unmanaged record
-  exists, or another record where an unmanaged CNAME exists, is a `Conflict`.
+- A `CNAME` cannot share its name with another record, so a CNAME at a name that has an unmanaged
+  record (or the reverse) is a `Conflict`.
 - Simply.com accepts exact duplicates, so the operator always lists the zone afresh before it
   creates or changes anything.
 - With `spec.zones` on the account, records outside those zones are neither written nor read, also
@@ -199,11 +182,10 @@ The operator was written to run against zones that also hold records made by han
 - `deletionPolicy: Orphan` removes the marker as it lets go, so a later object with the same name
   does not quietly take the record over. If the account is gone or Simply.com cannot be reached,
   the object is let go anyway and the marker stays (a warning event says so).
-- A ClusterAccount that no longer lets a namespace in (by `allowedNamespaces` or
-  `namespaceSelector`) lets that namespace's `DNSRecord`s be deleted without touching their
-  records, as does an account whose `zones` no longer includes the zone. A warning event says so.
-- A record whose marker was left behind that way is not taken over by a later object of the same
-  name if it has another name or type; that is a `Conflict` until the new object sets `adopt`.
+- If an account stops allowing a namespace or a zone, its `DNSRecord`s can still be deleted; their
+  records are left in the zone, with a warning event.
+- A later object with the same name does not inherit such a left-behind record if its name or type
+  differs; that is a `Conflict` until the object sets `adopt`.
 
 **Who may create records.** Anyone who can create a `DNSRecord` can add records to, and with
 `allowAdopt` take over, every zone of every account their namespace may use. Extra records at an
@@ -229,9 +211,11 @@ For example, a chart that is installed once per customer, each with its own host
 # values.yaml
 dns:
   enabled: true
+  account: default
   zone: example.com
   target: ingress.example.net
   hosts: [app, api]
+  ttl: 600
 ```
 
 ```yaml
@@ -245,12 +229,12 @@ metadata:
   name: {{ $.Release.Name }}-{{ . }}
 spec:
   accountRef:
-    name: default
+    name: {{ $.Values.dns.account }}
   zone: {{ $.Values.dns.zone }}
   name: {{ . }}.{{ $.Release.Name }}
   type: CNAME
   data: {{ $.Values.dns.target }}
-  ttl: 600
+  ttl: {{ $.Values.dns.ttl }}
   comment: {{ $.Release.Name }}
 {{- end }}
 {{- end }}

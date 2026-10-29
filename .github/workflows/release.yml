@@ -79,7 +79,7 @@ jobs:
           PRERELEASE: ${{ steps.version.outputs.prerelease }}
       - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
-      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+      - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -92,12 +92,18 @@ jobs:
           push: true
           tags: ${{ steps.tags.outputs.tags }}
           build-args: VERSION=${{ steps.version.outputs.version }}
+          # attest-build-provenance below records provenance; buildx's own would embed the push event.
+          provenance: false
           labels: |
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.version=${{ steps.version.outputs.version }}
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.licenses=Apache-2.0
             org.opencontainers.image.description=A Kubernetes operator for Simply.com DNS records
+          annotations: |
+            index:org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            index:org.opencontainers.image.description=A Kubernetes operator for Simply.com DNS records
+            index:org.opencontainers.image.licenses=Apache-2.0
       # Keyless signatures and attestations go to public transparency logs, which would name a
       # private repository, so a private repository releases unsigned.
       - if: github.event.repository.private == false
@@ -136,6 +142,7 @@ jobs:
         name: package and push the chart
         run: |
           sed -i "s/^  artifacthub.io\/prerelease: .*/  artifacthub.io\/prerelease: \"$PRERELEASE\"/" charts/simply-com-operator/Chart.yaml
+          sed -i "s|image: ghcr.io/petersr/simply-com-operator:.*|image: ghcr.io/petersr/simply-com-operator:v$VERSION|" charts/simply-com-operator/Chart.yaml
           helm package charts/simply-com-operator --version "$VERSION" --app-version "$VERSION" --destination "$RUNNER_TEMP"
           printf '%s' "$GITHUB_TOKEN" | helm registry login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
           helm push "$RUNNER_TEMP/simply-com-operator-$VERSION.tgz" "$CHART_REPO" 2>&1 | tee "$RUNNER_TEMP/push.log"
@@ -155,7 +162,7 @@ jobs:
           cosign-release: v3.1.2
       # cosign reads the Docker credentials, not the ones helm registry login wrote.
       - if: github.event.repository.private == false
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}

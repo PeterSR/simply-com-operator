@@ -9,8 +9,8 @@ which tests the tagged commit again, then publishes:
   tag is `vX.Y.Z`;
 - a GitHub release with the notes from `CHANGELOG.md` and the CRDs as `crds.yaml`.
 
-While the repository is public, the image and the chart are signed with cosign (keyless), and the
-image carries a build provenance attestation.
+The image and the chart are signed with cosign (keyless), and the image carries a build provenance
+attestation. Releases before 0.2.1 were made while the repository was private and are unsigned.
 
 ## Steps
 

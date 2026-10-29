@@ -29,6 +29,5 @@ go.work
 # Kubeconfig might contain secrets
 *.kubeconfig
 
-# Local notes and build output
-.agent-workspace/
+# Build output
 dist/
