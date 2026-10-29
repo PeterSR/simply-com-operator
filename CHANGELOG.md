@@ -6,6 +6,13 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-29
+
+### Added
+
+- Chart value `extraObjects`: more manifests to install with the chart, rendered through `tpl`,
+  so an install can carry the Secret's ExternalSecret and the ClusterAccount.
+
 ## [0.2.1] - 2026-10-29
 
 ### Changed
@@ -54,7 +61,8 @@ The first release.
 - Helm chart at `oci://ghcr.io/petersr/charts/simply-com-operator` and image at
   `ghcr.io/petersr/simply-com-operator`, for linux/amd64 and linux/arm64.
 
-[Unreleased]: https://github.com/PeterSR/simply-com-operator/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/PeterSR/simply-com-operator/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/PeterSR/simply-com-operator/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/PeterSR/simply-com-operator/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/PeterSR/simply-com-operator/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/PeterSR/simply-com-operator/releases/tag/v0.1.0

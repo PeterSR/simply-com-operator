@@ -90,3 +90,9 @@ priorityClassName: ""
 extraArgs: []
 # Extra environment variables for the manager.
 extraEnv: []
+
+# Extra manifests to install with the chart, rendered through tpl, such as an ExternalSecret for the
+# API key or a ClusterAccount. A ClusterAccount needs the CRDs first, which a plain `helm install`
+# cannot guarantee in the same release; Argo CD can, with
+# argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true on the object.
+extraObjects: []

@@ -256,6 +256,7 @@ uninstalling it removes them. The full example is in [examples/helm-chart/](exam
 | | `--zone-cache-ttl` | `10s` | how long a zone listing is reused when nothing needs changing |
 | `rbac.aggregateToDefaultRoles` | | `false` | let users with the built-in `edit`/`view` roles manage `DNSRecord`s and `Account`s |
 | `metrics.enabled` | `--metrics-bind-address` | off | Prometheus metrics on `:8080`, optionally with a `ServiceMonitor` |
+| `extraObjects` | | `[]` | more manifests to install with the chart (rendered through `tpl`), such as an ExternalSecret for the API key or the ClusterAccount itself |
 
 See [values.yaml](charts/simply-com-operator/values.yaml) for the rest.
 
