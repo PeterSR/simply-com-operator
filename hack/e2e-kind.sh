@@ -137,6 +137,8 @@ spec:
   deletionPolicy: Orphan
 YAML
 wait_reason dnsrecord/by-label NotPermitted -n labelled-later
+# The account's first status change also requeues its records; let it pass before labelling.
+wait_reason clusteraccount/by-label APIError
 kubectl label namespace labelled-later simply-dns=allowed
 wait_reason dnsrecord/by-label APIError -n labelled-later
 

@@ -126,8 +126,8 @@ namespace. With either, a namespace may use it when the list names it or the sel
 labels. An empty selector (`{}`) matches every namespace. Labelling a namespace takes `update` or
 `patch` on that Namespace object, which the built-in `admin` and `edit` roles do not grant, so with
 those a namespace's own users cannot let themselves in. Whoever may create namespaces can, and so
-can anyone bound inside the namespace to a role with wildcard rights (such as `cluster-admin`
-through a RoleBinding). Protect the label with an admission policy if that matters to you.
+can anyone bound inside the namespace by a RoleBinding to a role that may update or patch
+namespaces (such as `cluster-admin`). Protect the label with an admission policy if that matters to you.
 
 A ClusterAccount whose `namespaceSelector` is not a valid selector is `InvalidSpec`; until it is
 fixed, its records report `InvalidSpec` and those with `deletionPolicy: Delete` cannot be deleted.
@@ -198,9 +198,9 @@ The operator was written to run against zones that also hold records made by han
 - `deletionPolicy: Orphan` removes the marker as it lets go, so a later object with the same name
   does not quietly take the record over. If the account is gone or Simply.com cannot be reached,
   the object is let go anyway and the marker stays (a warning event says so).
-- A ClusterAccount that no longer lets a namespace in (by `allowedNamespaces` or `namespaceSelector`) lets that namespace's
-  `DNSRecord`s be deleted without touching their records, as does an account whose `zones` no
-  longer includes the zone. A warning event says so.
+- A ClusterAccount that no longer lets a namespace in (by `allowedNamespaces` or
+  `namespaceSelector`) lets that namespace's `DNSRecord`s be deleted without touching their
+  records, as does an account whose `zones` no longer includes the zone. A warning event says so.
 - A record whose marker was left behind that way is not taken over by a later object of the same
   name if it has another name or type; that is a `Conflict` until the new object sets `adopt`.
 
@@ -208,8 +208,9 @@ The operator was written to run against zones that also hold records made by han
 `allowAdopt` take over, every zone of every account their namespace may use. Extra records at an
 existing name are allowed by design (several `A` or `TXT` values), so this includes, say, a second
 `A` record for the apex or an `_acme-challenge` TXT. Grant `DNSRecord` creation like you would grant
-access to the DNS itself: give ClusterAccounts `allowedNamespaces` or `namespaceSelector`, and `zones`, and leave the chart's
-`rbac.aggregateToDefaultRoles` off unless every namespace editor should have that power. The
+access to the DNS itself: give ClusterAccounts `allowedNamespaces` or `namespaceSelector`, and
+`zones`, and leave the chart's `rbac.aggregateToDefaultRoles` off unless every namespace editor
+should have that power. The
 `zones` and `allowAdopt` of a namespaced `Account` are guard rails for its own namespace, not a
 boundary: whoever may edit the Account, or read its Secret, can change them or use the key directly.
 

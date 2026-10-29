@@ -13,7 +13,8 @@ All notable changes are recorded here. The format follows
 - `ClusterAccount.spec.namespaceSelector`: let namespaces use the account by their labels, besides
   those named in `allowedNamespaces`. Records notice a namespace's labels changing at once. The
   operator now reads and watches Namespaces, for which the chart's ClusterRole grants
-  `get`, `list` and `watch`.
+  `get`, `list` and `watch`. A ClusterAccount whose selector is invalid reports `InvalidSpec`, and
+  until it is fixed its records with `deletionPolicy: Delete` cannot be deleted.
 
 ### Upgrade notes
 
