@@ -6,6 +6,15 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-10-29
+
+### Fixed
+
+- `crds.keep` also keeps the CRDs when an Argo CD Application of the chart is deleted or would
+  prune them (`argocd.argoproj.io/sync-options: Delete=false,Prune=false`). Argo CD ignores Helm's resource policy, so
+  deleting the Application deleted the CRDs and with them every DNSRecord, whose records the
+  operator then removed from the zone.
+
 ## [0.3.0] - 2026-10-29
 
 ### Added
@@ -61,7 +70,8 @@ The first release.
 - Helm chart at `oci://ghcr.io/petersr/charts/simply-com-operator` and image at
   `ghcr.io/petersr/simply-com-operator`, for linux/amd64 and linux/arm64.
 
-[Unreleased]: https://github.com/PeterSR/simply-com-operator/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/PeterSR/simply-com-operator/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/PeterSR/simply-com-operator/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/PeterSR/simply-com-operator/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/PeterSR/simply-com-operator/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/PeterSR/simply-com-operator/compare/v0.1.0...v0.2.0
