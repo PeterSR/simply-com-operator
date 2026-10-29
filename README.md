@@ -54,7 +54,8 @@ helm install simply-com-operator oci://ghcr.io/petersr/charts/simply-com-operato
 [Safety](#safety-what-the-operator-will-and-will-not-touch)).
 
 The chart installs the CustomResourceDefinitions too (`crds.install`), and keeps them on uninstall
-(`crds.keep`) so that uninstalling the chart does not delete every `DNSRecord`. To install the
+(`crds.keep`, which Argo CD honours too) so that uninstalling the chart does not delete every
+`DNSRecord`. To install the
 definitions yourself, each release also carries them as `crds.yaml`:
 
 ```bash
@@ -276,8 +277,8 @@ namespaced `Account`s.
   and TLSA/SSHFP hex case. For other types (HTTPS, LOC, ...) write the data the way Simply.com
   returns it: otherwise each resync rewrites the record, and a hand-made record with the same value
   is not recognised as one, so the operator adds a second record instead of reporting a conflict.
-- Uninstalling the chart (or deleting its Argo CD Application) keeps the CRDs and every `DNSRecord`, but nothing then removes their
-  finalizers. Delete the `DNSRecord`s (or set them to `Orphan`) before uninstalling.
+- Uninstalling the chart, or deleting its Argo CD Application, keeps the CRDs and every
+  `DNSRecord`, but nothing then removes their finalizers. Delete the `DNSRecord`s (or set them to `Orphan`) before uninstalling.
 - If the account or its Secret is gone when a `DNSRecord` with `deletionPolicy: Delete` is deleted,
   deletion waits until it is back. Set `deletionPolicy: Orphan` on the object to let it go. Keep
   `Account`s and their Secrets out of the namespaces that are deleted together with their records,

@@ -10,8 +10,8 @@ All notable changes are recorded here. The format follows
 
 ### Fixed
 
-- `crds.keep` also keeps the CRDs when an Argo CD Application of the chart is deleted
-  (`argocd.argoproj.io/sync-options: Delete=false`). Argo CD ignores Helm's resource policy, so
+- `crds.keep` also keeps the CRDs when an Argo CD Application of the chart is deleted or would
+  prune them (`argocd.argoproj.io/sync-options: Delete=false,Prune=false`). Argo CD ignores Helm's resource policy, so
   deleting the Application deleted the CRDs and with them every DNSRecord, whose records the
   operator then removed from the zone.
 

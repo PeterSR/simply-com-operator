@@ -5,7 +5,7 @@ metadata:
   annotations:
     {{- if .Values.crds.keep }}
     helm.sh/resource-policy: keep
-    argocd.argoproj.io/sync-options: Delete=false
+    argocd.argoproj.io/sync-options: Delete=false,Prune=false
     {{- end }}
     controller-gen.kubebuilder.io/version: v0.22.0
   name: clusteraccounts.simplycom.petersr.github.io
