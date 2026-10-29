@@ -127,7 +127,8 @@ labels. An empty selector (`{}`) matches every namespace. Labelling a namespace 
 `patch` on that Namespace object, which the built-in `admin` and `edit` roles do not grant, so with
 those a namespace's own users cannot let themselves in. Whoever may create namespaces can, and so
 can anyone bound inside the namespace by a RoleBinding to a role that may update or patch
-namespaces (such as `cluster-admin`). Protect the label with an admission policy if that matters to you.
+namespaces (such as `cluster-admin`). Protect the label with an admission policy if that matters
+to you.
 
 A ClusterAccount whose `namespaceSelector` is not a valid selector is `InvalidSpec`; until it is
 fixed, its records report `InvalidSpec` and those with `deletionPolicy: Delete` cannot be deleted.
@@ -210,9 +211,9 @@ existing name are allowed by design (several `A` or `TXT` values), so this inclu
 `A` record for the apex or an `_acme-challenge` TXT. Grant `DNSRecord` creation like you would grant
 access to the DNS itself: give ClusterAccounts `allowedNamespaces` or `namespaceSelector`, and
 `zones`, and leave the chart's `rbac.aggregateToDefaultRoles` off unless every namespace editor
-should have that power. The
-`zones` and `allowAdopt` of a namespaced `Account` are guard rails for its own namespace, not a
-boundary: whoever may edit the Account, or read its Secret, can change them or use the key directly.
+should have that power. The `zones` and `allowAdopt` of a namespaced `Account` are guard rails for
+its own namespace, not a boundary: whoever may edit the Account, or read its Secret, can change
+them or use the key directly.
 
 **Owner id.** Every installation that may manage records in the same zone (one per cluster, and a
 cluster restored from another's backup) needs its own `ownerID`. Two installations with the same id
