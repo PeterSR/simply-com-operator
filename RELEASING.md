@@ -16,8 +16,9 @@ attestation. Releases before 0.2.1 were made while the repository was private an
 
 1. Move the `[Unreleased]` entries in `CHANGELOG.md` under a new `## [X.Y.Z] - YYYY-MM-DD`
    heading, and update the links at the bottom.
-2. Set `version` and `appVersion` in `charts/simply-com-operator/Chart.yaml` to `X.Y.Z`. The release
-   workflow sets them from the tag anyway; this keeps the chart in the repository honest.
+2. Set `version`, `appVersion` and the image tag in `artifacthub.io/images` in
+   `charts/simply-com-operator/Chart.yaml` to `X.Y.Z`. The release workflow sets them from the tag
+   anyway; this keeps the chart in the repository honest.
 3. Merge that to `main`, then tag the merge commit and push the tag:
 
    ```bash
