@@ -15,6 +15,13 @@ All notable changes are recorded here. The format follows
   operator now reads and watches Namespaces, for which the chart's ClusterRole grants
   `get`, `list` and `watch`.
 
+### Upgrade notes
+
+- Apply the 0.2.0 CRDs before using `namespaceSelector`. An older CRD or operator does not know the
+  field and reads an account restricted by the selector alone as open to every namespace, so do
+  not roll back below 0.2.0 while one exists. Listing at least one namespace in
+  `allowedNamespaces` as well makes older versions fail closed.
+
 ## [0.1.0] - 2026-10-28
 
 The first release.

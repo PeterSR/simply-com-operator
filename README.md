@@ -123,9 +123,20 @@ Both have:
 
 A ClusterAccount with neither `allowedNamespaces` nor `namespaceSelector` may be used from every
 namespace. With either, a namespace may use it when the list names it or the selector matches its
-labels. An empty selector (`{}`) matches every namespace. Labelling a namespace takes rights over
-Namespace objects, which namespace admins normally lack, so a namespace's own users cannot let
-themselves in; whoever may create namespaces can, by labelling them. Records notice a label change at once.
+labels. An empty selector (`{}`) matches every namespace. Labelling a namespace takes `update` or
+`patch` on that Namespace object, which the built-in `admin` and `edit` roles do not grant, so with
+those a namespace's own users cannot let themselves in. Whoever may create namespaces can, and so
+can anyone bound inside the namespace to a role with wildcard rights (such as `cluster-admin`
+through a RoleBinding). Protect the label with an admission policy if that matters to you.
+
+A ClusterAccount whose `namespaceSelector` is not a valid selector is `InvalidSpec`; until it is
+fixed, its records report `InvalidSpec` and those with `deletionPolicy: Delete` cannot be deleted.
+
+**Upgrading to 0.2.0 and rolling back.** Apply the 0.2.0 CRDs before using `namespaceSelector`
+(the chart does this unless `crds.install` is off). An older CRD or operator does not know the
+field and reads such an account as allowing every namespace, so do not roll back below 0.2.0 while
+an account relies on the selector alone. Listing at least one namespace in `allowedNamespaces` too
+makes an older version fail closed. Records notice a label change at once.
 
 The status reports whether Simply.com accepted the key (`Ready`) and which products it can reach
 (`status.products`). The key is read when it is used, so a rotated Secret takes effect at once.

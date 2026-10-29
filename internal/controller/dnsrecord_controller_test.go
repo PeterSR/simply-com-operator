@@ -320,7 +320,7 @@ var _ = Describe("DNSRecord", Ordered, func() {
 		key := types.NamespacedName{Namespace: obj.Namespace, Name: obj.Name}
 		Eventually(readyCondition(key), timeout, interval).Should(haveReason(metav1.ConditionTrue, simplycomv1alpha1.ReasonSynced))
 
-		// Taking the label away is noticed without waiting for the resync.
+		// The suite resyncs every few seconds, so this does not prove the Namespace watch; the kind e2e does.
 		setLabel := func(value string) {
 			var current corev1.Namespace
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: ns.Name}, &current)).To(Succeed())

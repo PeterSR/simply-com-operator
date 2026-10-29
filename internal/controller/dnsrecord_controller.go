@@ -199,7 +199,7 @@ func (r *DNSRecordReconciler) finalize(ctx context.Context, obj *simplycomv1alph
 				"%s; any record is left in the zone as it is, with the ownership marker", err)
 			return r.release(ctx, obj)
 		}
-		msg := err.Error() + "; the record cannot be removed until the account is back, " +
+		msg := err.Error() + "; the record cannot be removed until the account is usable again, " +
 			"or set spec.deletionPolicy to Orphan to leave it in the zone"
 		return r.notReady(ctx, obj, reasonFor(err), msg, r.RetryInterval)
 	}

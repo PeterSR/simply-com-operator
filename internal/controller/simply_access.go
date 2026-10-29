@@ -188,10 +188,9 @@ func (s *SimplyAccess) namespaceAllowed(ctx context.Context, acc *simplycomv1alp
 		return false, nil
 	}
 	var ns corev1.Namespace
+	// A namespace that holds objects exists, so not finding it is the cache lagging: retry rather
+	// than report NotPermitted, which would let a deletion leave the record behind.
 	if err := s.Reader.Get(ctx, types.NamespacedName{Name: namespace}, &ns); err != nil {
-		if apierrors.IsNotFound(err) {
-			return false, nil
-		}
 		return false, err
 	}
 	return selector.Matches(labels.Set(ns.Labels)), nil
