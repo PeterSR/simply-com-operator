@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 # Keep in step with the toolchain line in go.mod.
-FROM --platform=$BUILDPLATFORM golang:1.26.10 AS builder
+FROM --platform=$BUILDPLATFORM golang:1.27.3 AS builder
 ARG TARGETOS
 ARG TARGETARCH
 ARG VERSION=dev
